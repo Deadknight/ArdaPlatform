@@ -57,11 +57,13 @@ class ArdaBootstrapServerService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        ArdaBridgeConfigStore.ensureRuntimeConfig(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> stopServer()
+            ACTION_RELOAD_CONFIG -> reloadRuntimeConfig()
             else -> {
                 stopRequested.set(false)
                 val effectiveIntent = Intent(intent ?: Intent()).setAction(ACTION_START)
@@ -70,6 +72,24 @@ class ArdaBootstrapServerService : Service() {
             }
         }
         return START_STICKY
+    }
+
+
+    private fun reloadRuntimeConfig() {
+        val config = ArdaBridgeConfigStore.ensureRuntimeConfig(this)
+        ArdaPlatformState.log(
+            "ARDA_RN3B_AAOS_CONFIG_RELOAD=PASS addr=${config.host}:${config.port}",
+        )
+        // The root supervisor notices the atomically replaced TOML and restarts
+        // bt-bootstrapd. Closing only the active bridge lets the phone reconnect
+        // without stopping the long-lived hotspot or RFCOMM accept loop.
+        closeQuietly(senderdBridge)
+        closeQuietly(bluetoothPeer)
+        senderdBridge = null
+        bluetoothPeer = null
+        if (!running.get() && !stopRequested.get()) {
+            startServer(lastStartIntent)
+        }
     }
 
     private fun startServer(@Suppress("UNUSED_PARAMETER") startIntent: Intent?) {
@@ -433,6 +453,8 @@ class ArdaBootstrapServerService : Service() {
             "com.github.deadknight.ardaplatform.action.START_BOOTSTRAP"
         const val ACTION_STOP =
             "com.github.deadknight.ardaplatform.action.STOP_BOOTSTRAP"
+        const val ACTION_RELOAD_CONFIG =
+            "com.github.deadknight.ardaplatform.action.RELOAD_CONFIG"
         const val EXTRA_START_SOURCE = "arda_start_source"
 
         private const val channelId = "arda_bt_bootstrap"
