@@ -97,43 +97,62 @@ class ArdaBootstrapServerService : Service() {
                 ArdaPlatformState.log("ARDA_RN3B_AAOS_WIFI_BOOTSTRAP=PASS")
                 updateNotification("Waiting for ARDA companion")
 
-                val adapter = bluetoothAdapter() ?: error("Bluetooth adapter unavailable")
-                require(adapter.isEnabled) { "Bluetooth adapter disabled" }
-                require(hasBluetoothConnectPermission()) {
-                    "BLUETOOTH_CONNECT permission is not granted"
-                }
-
-                serverSocket = adapter.listenUsingRfcommWithServiceRecord(
-                    ArdaBluetoothTransport.serviceName,
-                    ArdaBluetoothTransport.serviceUuid,
-                )
-                ArdaPlatformState.log("ARDA_RN3B_AAOS_RFCOMM_LISTEN=PASS")
-
                 while (running.get()) {
-                    val peer = serverSocket?.accept() ?: break
-                    bluetoothPeer = peer
-                    ArdaPlatformState.peerConnected.value = true
-                    ArdaPlatformState.log(
-                        "ARDA_RN3B_AAOS_PEER_CONNECTED=${safePeerAddress(peer)}",
-                    )
-                    updateNotification("ARDA companion connected")
+                    val adapter = waitForBluetoothReady() ?: break
 
                     try {
-                        refreshHotspotInfoIfNeeded()
-                        bridgePeerToSenderd(peer)
-                    } catch (error: Throwable) {
-                        ArdaPlatformState.log(
-                            "ARDA_RN3B_AAOS_BRIDGE_ERROR=" +
-                                "${error.javaClass.simpleName}:${error.safeMessage()}",
+                        serverSocket = adapter.listenUsingRfcommWithServiceRecord(
+                            ArdaBluetoothTransport.serviceName,
+                            ArdaBluetoothTransport.serviceUuid,
                         )
-                    } finally {
-                        closeQuietly(senderdBridge)
-                        closeQuietly(peer)
-                        senderdBridge = null
-                        bluetoothPeer = null
-                        ArdaPlatformState.peerConnected.value = false
+                        ArdaPlatformState.log("ARDA_RN3B_AAOS_RFCOMM_LISTEN=PASS")
                         updateNotification("Waiting for ARDA companion")
-                        ArdaPlatformState.log("ARDA_RN3B_AAOS_PEER_DISCONNECTED=YES")
+
+                        while (running.get()) {
+                            val peer = serverSocket?.accept() ?: break
+                            bluetoothPeer = peer
+                            ArdaPlatformState.peerConnected.value = true
+                            ArdaPlatformState.log(
+                                "ARDA_RN3B_AAOS_PEER_CONNECTED=${safePeerAddress(peer)}",
+                            )
+                            updateNotification("ARDA companion connected")
+
+                            try {
+                                refreshHotspotInfoIfNeeded()
+                                bridgePeerToSenderd(peer)
+                            } catch (error: Throwable) {
+                                ArdaPlatformState.log(
+                                    "ARDA_RN3B_AAOS_BRIDGE_ERROR=" +
+                                        "${error.javaClass.simpleName}:${error.safeMessage()}",
+                                )
+                            } finally {
+                                closeQuietly(senderdBridge)
+                                closeQuietly(peer)
+                                senderdBridge = null
+                                bluetoothPeer = null
+                                ArdaPlatformState.peerConnected.value = false
+                                updateNotification("Waiting for ARDA companion")
+                                ArdaPlatformState.log("ARDA_RN3B_AAOS_PEER_DISCONNECTED=YES")
+                            }
+                        }
+                    } catch (error: Throwable) {
+                        if (running.get()) {
+                            ArdaPlatformState.log(
+                                "ARDA_RN3B_AAOS_RFCOMM_LISTENER_ERROR=" +
+                                    "${error.javaClass.simpleName}:${error.safeMessage()}",
+                            )
+                        }
+                    } finally {
+                        closeQuietly(serverSocket)
+                        serverSocket = null
+                    }
+
+                    if (running.get()) {
+                        ArdaPlatformState.log(
+                            "ARDA_RN3B_AAOS_RFCOMM_RESTART_SCHEDULED=" +
+                                "${rfcommRestartDelayMs}ms",
+                        )
+                        Thread.sleep(rfcommRestartDelayMs)
                     }
                 }
             } catch (error: Throwable) {
@@ -157,6 +176,30 @@ class ArdaBootstrapServerService : Service() {
         }
     }
 
+
+
+    private fun waitForBluetoothReady(): BluetoothAdapter? {
+        var lastReason: String? = null
+
+        while (running.get() && !stopRequested.get()) {
+            val adapter = bluetoothAdapter()
+            val reason = when {
+                !hasBluetoothConnectPermission() -> "BLUETOOTH_CONNECT_PERMISSION"
+                adapter == null -> "ADAPTER_UNAVAILABLE"
+                !adapter.isEnabled -> "ADAPTER_DISABLED"
+                else -> return adapter
+            }
+
+            if (reason != lastReason) {
+                ArdaPlatformState.log("ARDA_RN3B_AAOS_RFCOMM_WAIT=$reason")
+                updateNotification("Waiting for Bluetooth")
+                lastReason = reason
+            }
+            Thread.sleep(bluetoothReadyPollMs)
+        }
+
+        return null
+    }
 
     private fun refreshHotspotInfoIfNeeded() {
         if (hotspotInfo != null) return
@@ -399,5 +442,7 @@ class ArdaBootstrapServerService : Service() {
         private const val maxBridgeTokenBytes = 512
         private const val platformWifiRequestId = 0x4152444157494649L
         private const val serverRestartDelayMs = 2_000L
+        private const val rfcommRestartDelayMs = 2_000L
+        private const val bluetoothReadyPollMs = 2_000L
     }
 }
