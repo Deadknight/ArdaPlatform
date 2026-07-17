@@ -6,27 +6,24 @@ import android.net.wifi.WifiConfiguration
 import android.net.wifi.WifiManager
 import android.net.wifi.WifiSsid
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
-import android.provider.Settings
 import org.json.JSONObject
 import java.io.Closeable
+import java.net.NetworkInterface
 import java.security.SecureRandom
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
-/**
- * Identity advertised over Bluetooth and used by the phone's exact
- * WifiNetworkSpecifier request. SSID/PSK are stable across normal app updates;
- * BSSID is the actual value returned by the framework for the running LOHS.
- */
+/** Fixed device-owned LocalOnlyHotspot identity advertised through senderd. */
 data class ArdaHotspotInfo(
     val ssid: String,
     val passphrase: String?,
     val security: String,
     val bssid: String?,
+    val apIp: String?,
 ) {
     fun toJson(): String = JSONObject()
         .put("available", true)
@@ -34,6 +31,7 @@ data class ArdaHotspotInfo(
         .put("psk", passphrase ?: JSONObject.NULL)
         .put("security", security)
         .put("bssid", bssid ?: JSONObject.NULL)
+        .put("ap_ip", apIp ?: JSONObject.NULL)
         .toString()
 }
 
@@ -42,54 +40,60 @@ private data class ArdaHotspotIdentity(
     val passphrase: String,
 )
 
+/**
+ * Final AAOS hotspot owner.
+ *
+ * This class never falls back to framework-generated AndroidShare/ArdaShare
+ * credentials. Failure to create the fixed AP is a visible transport failure.
+ */
 class ArdaHotspotController(context: Context) : Closeable {
     private val appContext = context.applicationContext
     private val wifiManager = appContext.getSystemService(WifiManager::class.java)
-    private val callbackHandler = Handler(Looper.getMainLooper())
+    private val callbackExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val identity = loadOrCreateIdentity(appContext)
 
-    @Volatile
-    private var reservation: WifiManager.LocalOnlyHotspotReservation? = null
-
-    @Volatile
-    private var currentInfo: ArdaHotspotInfo? = null
-
-    @Volatile
-    private var stableConfigActive: Boolean = false
+    @Volatile private var reservation: WifiManager.LocalOnlyHotspotReservation? = null
+    @Volatile private var currentInfo: ArdaHotspotInfo? = null
 
     fun startBlocking(timeoutMs: Long): ArdaHotspotInfo? {
         currentInfo?.let {
             ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_REUSE=PASS")
             return it
         }
+        require(Build.VERSION.SDK_INT >= 36) {
+            "Fixed ARDA LocalOnlyHotspot requires Android 16/API 36"
+        }
+
+        val config = buildStableSoftApConfiguration()
+        require(wifiManager.validateSoftApConfiguration(config)) {
+            "Framework rejected fixed ARDA LocalOnlyHotspot configuration"
+        }
 
         val latch = CountDownLatch(1)
         val result = AtomicReference<ArdaHotspotInfo?>()
         val failure = AtomicReference<String?>()
-
         val callback = object : WifiManager.LocalOnlyHotspotCallback() {
             override fun onStarted(newReservation: WifiManager.LocalOnlyHotspotReservation) {
                 reservation = newReservation
-                val info = reservationInfo(newReservation)
+                val info = reservationInfo(newReservation, timeoutMs)
                 currentInfo = info
                 result.set(info)
                 ArdaPlatformState.hotspotReady.value = true
                 ArdaPlatformState.hotspotSsid.value = info.ssid
-                ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_START=PASS")
-                ArdaPlatformState.log(
-                    "ARDA_RN3B_AAOS_LOHS_IDENTITY=" +
-                        if (stableConfigActive) "STABLE" else "FRAMEWORK_RANDOM",
-                )
+                ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_CONFIG_MODE=PLATFORM_SINGLE_USER_FIXED")
+                ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_STABLE_CONFIG_GATE=PASS")
+                ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_IDENTITY=DEVICE_OWNED_STABLE")
                 ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_SSID=${info.ssid}")
-                ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_BSSID=${info.bssid ?: "framework_unreported"}")
+                ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_BSSID=${info.bssid ?: "unreported"}")
+                ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_AP_IP=${info.apIp ?: "unreported"}")
                 ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_SECURITY=${info.security}")
+                ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_START=PASS")
                 latch.countDown()
             }
 
             override fun onStopped() {
                 reservation = null
                 currentInfo = null
-                stableConfigActive = false
                 ArdaPlatformState.hotspotReady.value = false
                 ArdaPlatformState.hotspotSsid.value = null
                 ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_STOPPED=YES")
@@ -105,57 +109,23 @@ class ArdaHotspotController(context: Context) : Closeable {
             }
         }
 
-        try {
-            if (Build.VERSION.SDK_INT >= 36) {
-                val config = buildStableSoftApConfiguration()
-                if (config != null) {
-                    stableConfigActive = true
-                    require(wifiManager.validateSoftApConfiguration(config)) {
-                        "Framework rejected stable ARDA LocalOnlyHotspot configuration"
-                    }
-                    wifiManager.startLocalOnlyHotspotWithConfiguration(
-                        config,
-                        appContext.mainExecutor,
-                        callback,
-                    )
-                    ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_CONFIG_MODE=STABLE_CUSTOM")
-                    ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_STABLE_CONFIG_GATE=PASS")
-                } else {
-                    stableConfigActive = false
-                    // Android 16 API 36 exposes custom LOHS, while the public
-                    // SSID/passphrase Builder methods are part of the 36.1 SDK.
-                    // Keep compileSdk 36 compatibility and fail visibly to the
-                    // framework-generated identity when those runtime methods
-                    // are not present on this particular AAOS image.
-                    wifiManager.startLocalOnlyHotspot(callback, callbackHandler)
-                    ArdaPlatformState.log(
-                        "ARDA_RN3B_AAOS_LOHS_CONFIG_MODE=FRAMEWORK_RANDOM_FALLBACK",
-                    )
-                    ArdaPlatformState.log(
-                        "ARDA_RN3B_AAOS_LOHS_STABLE_CONFIG_GATE=UNAVAILABLE_ON_RUNTIME",
-                    )
-                }
-            } else {
-                stableConfigActive = false
-                wifiManager.startLocalOnlyHotspot(callback, callbackHandler)
-                ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_CONFIG_MODE=FRAMEWORK_RANDOM_FALLBACK")
-                ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_STABLE_CONFIG_GATE=SDK_TOO_OLD")
-            }
-        } catch (error: Throwable) {
-            failure.set("${error.javaClass.simpleName}:${error.message ?: "no-message"}")
-            ArdaPlatformState.log(
-                "ARDA_RN3B_AAOS_LOHS_ERROR=${failure.get()}",
+        runCatching {
+            wifiManager.startLocalOnlyHotspotWithConfiguration(
+                config,
+                callbackExecutor,
+                callback,
             )
-            return null
+        }.onFailure { error ->
+            failure.set("${error.javaClass.simpleName}:${error.safeMessage()}")
+            ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_ERROR=${failure.get()}")
+            latch.countDown()
         }
 
         if (!latch.await(timeoutMs, TimeUnit.MILLISECONDS)) {
-            failure.set("timeout")
             ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_START=FAIL reason=timeout")
             close()
             return null
         }
-
         if (result.get() == null) {
             ArdaPlatformState.log(
                 "ARDA_RN3B_AAOS_LOHS_UNAVAILABLE=${failure.get() ?: "unknown"}",
@@ -164,8 +134,7 @@ class ArdaHotspotController(context: Context) : Closeable {
         return result.get()
     }
 
-
-    private fun buildStableSoftApConfiguration(): SoftApConfiguration? {
+    private fun buildStableSoftApConfiguration(): SoftApConfiguration {
         val builder = SoftApConfiguration.Builder()
         val builderClass = builder.javaClass
 
@@ -174,8 +143,6 @@ class ArdaHotspotController(context: Context) : Closeable {
             findBuilderMethod(builderClass, "setWifiSsid", WifiSsid::class.java)
                 .invoke(builder, wifiSsid)
         }.recoverCatching {
-            // Some Android 16 platform snapshots carried a String setter before
-            // the public 36.1 WifiSsid API shape was finalized.
             findBuilderMethod(builderClass, "setSsid", String::class.java)
                 .invoke(builder, identity.ssid)
         }.isSuccess
@@ -193,52 +160,160 @@ class ArdaHotspotController(context: Context) : Closeable {
             )
         }.isSuccess
 
-        if (!ssidConfigured || !passphraseConfigured) {
-            ArdaPlatformState.log(
-                "ARDA_RN3B_AAOS_LOHS_CUSTOM_BUILDER=" +
-                    "ssid=$ssidConfigured;passphrase=$passphraseConfigured",
-            )
-            return null
+        require(ssidConfigured && passphraseConfigured) {
+            "AAOS SoftApConfiguration does not expose fixed SSID/PSK setters"
         }
+
+        val bandConfigured = invokeBuilderBestEffort(
+            builder,
+            "setBand",
+            arrayOf(Int::class.javaPrimitiveType!!),
+            arrayOf(1),
+        )
+        val autoShutdownConfigured = invokeBuilderBestEffort(
+            builder,
+            "setAutoShutdownEnabled",
+            arrayOf(Boolean::class.javaPrimitiveType!!),
+            arrayOf(false),
+        )
+        // RANDOMIZATION_NONE = 0 in SoftApConfiguration. A stable SoftAP MAC lets
+        // the phone make an exact SSID+BSSID request when the framework reports it.
+        val stableMacConfigured = invokeBuilderBestEffort(
+            builder,
+            "setMacRandomizationSetting",
+            arrayOf(Int::class.javaPrimitiveType!!),
+            arrayOf(0),
+        )
+        ArdaPlatformState.log(
+            "ARDA_RN3B_AAOS_LOHS_BUILDER=" +
+                "band=$bandConfigured;auto_shutdown=$autoShutdownConfigured;" +
+                "stable_mac=$stableMacConfigured",
+        )
         return builder.build()
     }
+
+    private fun invokeBuilderBestEffort(
+        builder: Any,
+        name: String,
+        parameterTypes: Array<Class<*>>,
+        args: Array<Any>,
+    ): Boolean = runCatching {
+        findBuilderMethod(builder.javaClass, name, *parameterTypes)
+            .invoke(builder, *args)
+    }.isSuccess
 
     private fun findBuilderMethod(
         type: Class<*>,
         name: String,
         vararg parameterTypes: Class<*>,
-    ): java.lang.reflect.Method {
-        return runCatching { type.getMethod(name, *parameterTypes) }
-            .getOrElse {
-                type.getDeclaredMethod(name, *parameterTypes).apply {
-                    isAccessible = true
-                }
-            }
+    ): java.lang.reflect.Method = runCatching {
+        type.getMethod(name, *parameterTypes)
+    }.getOrElse {
+        type.getDeclaredMethod(name, *parameterTypes).apply { isAccessible = true }
     }
 
     @Suppress("DEPRECATION")
     private fun reservationInfo(
         reservation: WifiManager.LocalOnlyHotspotReservation,
+        timeoutMs: Long,
     ): ArdaHotspotInfo {
-        return if (Build.VERSION.SDK_INT >= 30) {
+        if (Build.VERSION.SDK_INT >= 30) {
             val config = reservation.softApConfiguration
-            val passphrase = config.passphrase
-            ArdaHotspotInfo(
-                ssid = config.ssid ?: error("LocalOnlyHotspot returned an empty SSID"),
-                passphrase = passphrase,
-                security = if (passphrase.isNullOrBlank()) "open" else "wpa2",
-                bssid = config.bssid?.toString()?.uppercase(Locale.US),
+            val frameworkBssid = normalizeMac(config.bssid?.toString())
+            val interfaceBssid = readSoftApInterfaceBssid()
+            val resolvedBssid = frameworkBssid ?: interfaceBssid
+            ArdaPlatformState.log(
+                "ARDA_RN3B_AAOS_LOHS_BSSID_SOURCE=" + when {
+                    frameworkBssid != null -> "FRAMEWORK_CONFIG"
+                    interfaceBssid != null -> "NETWORK_INTERFACE"
+                    else -> "UNAVAILABLE"
+                },
             )
-        } else {
-            val config: WifiConfiguration? = reservation.wifiConfiguration
-            val passphrase = config?.preSharedKey?.trim('"')
-            ArdaHotspotInfo(
-                ssid = config?.SSID?.trim('"')
-                    ?: error("LocalOnlyHotspot returned an empty SSID"),
+            val passphrase = config.passphrase ?: identity.passphrase
+            return ArdaHotspotInfo(
+                ssid = config.ssid ?: identity.ssid,
                 passphrase = passphrase,
-                security = if (passphrase.isNullOrBlank()) "open" else "wpa2",
-                bssid = config?.BSSID?.uppercase(Locale.US),
+                security = if (passphrase.isBlank()) "open" else "wpa2",
+                bssid = resolvedBssid,
+                apIp = waitForSoftApInterfaceIpv4(timeoutMs),
             )
+        }
+
+        val config: WifiConfiguration? = reservation.wifiConfiguration
+        val passphrase = config?.preSharedKey?.trim('"') ?: identity.passphrase
+        return ArdaHotspotInfo(
+            ssid = config?.SSID?.trim('"') ?: identity.ssid,
+            passphrase = passphrase,
+            security = if (passphrase.isBlank()) "open" else "wpa2",
+            bssid = normalizeMac(config?.BSSID),
+            apIp = waitForSoftApInterfaceIpv4(timeoutMs),
+        )
+    }
+
+    private fun waitForSoftApInterfaceIpv4(timeoutMs: Long): String? {
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
+        while (System.nanoTime() < deadline) {
+            readSoftApInterfaceIpv4()?.let { return it }
+            Thread.sleep(250)
+        }
+        return readSoftApInterfaceIpv4()
+    }
+
+    private fun readSoftApInterfaceIpv4(): String? {
+        for (name in interfaceCandidates()) {
+            val addresses = runCatching {
+                NetworkInterface.getByName(name)?.inetAddresses?.toList().orEmpty()
+            }.getOrDefault(emptyList())
+            val ipv4 = addresses.firstOrNull { address ->
+                address is java.net.Inet4Address &&
+                    !address.isAnyLocalAddress &&
+                    !address.isLoopbackAddress &&
+                    !address.isLinkLocalAddress
+            } ?: continue
+            val text = ipv4.hostAddress ?: continue
+            ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_AP_INTERFACE=$name:$text")
+            return text
+        }
+        return null
+    }
+
+    private fun readSoftApInterfaceBssid(): String? {
+        for (name in interfaceCandidates()) {
+            val address = runCatching {
+                NetworkInterface.getByName(name)?.hardwareAddress
+            }.getOrNull() ?: continue
+            if (address.size != 6) continue
+            val mac = address.joinToString(":") { byte ->
+                "%02X".format(byte.toInt() and 0xFF)
+            }
+            normalizeMac(mac)?.let {
+                ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_BSSID_INTERFACE=$name:$it")
+                return it
+            }
+        }
+        return null
+    }
+
+    private fun interfaceCandidates(): List<String> {
+        val preferred = listOf("ap0", "softap0", "wlan1", "wlan0")
+        val all = runCatching {
+            NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
+                .map { it.name }
+                .filter { it.contains("ap", ignoreCase = true) || it.startsWith("wlan") }
+        }.getOrDefault(emptyList())
+        return (preferred + all).distinct()
+    }
+
+    private fun normalizeMac(value: String?): String? {
+        val normalized = value
+            ?.trim()
+            ?.uppercase(Locale.US)
+            ?.takeIf { it.matches(MAC_PATTERN) }
+            ?: return null
+        return normalized.takeUnless {
+            it == "00:00:00:00:00:00" ||
+                it == "02:00:00:00:00:00" ||
+                it == "FF:FF:FF:FF:FF:FF"
         }
     }
 
@@ -254,9 +329,9 @@ class ArdaHotspotController(context: Context) : Closeable {
         runCatching { reservation?.close() }
         reservation = null
         currentInfo = null
-        stableConfigActive = false
         ArdaPlatformState.hotspotReady.value = false
         ArdaPlatformState.hotspotSsid.value = null
+        callbackExecutor.shutdownNow()
     }
 
     private fun loadOrCreateIdentity(context: Context): ArdaHotspotIdentity {
@@ -265,48 +340,107 @@ class ArdaHotspotController(context: Context) : Closeable {
             HOTSPOT_PREFS,
             Context.MODE_PRIVATE,
         )
+
+        val savedVersion = preferences.getInt(KEY_CREDENTIAL_VERSION, 0)
         val savedSsid = preferences.getString(KEY_SSID, null)
         val savedPassphrase = preferences.getString(KEY_PASSPHRASE, null)
-        if (!savedSsid.isNullOrBlank() && !savedPassphrase.isNullOrBlank()) {
-            return ArdaHotspotIdentity(savedSsid, savedPassphrase)
+        if (
+            savedVersion == CREDENTIAL_VERSION &&
+            isValidGeneratedSsid(savedSsid) &&
+            isValidPassphrase(savedPassphrase)
+        ) {
+            ArdaPlatformState.log(
+                "ARDA_RN3B_AAOS_LOHS_CREDENTIAL_SOURCE=DEVICE_PROTECTED_STORAGE",
+            )
+            ArdaPlatformState.log(
+                "ARDA_RN3B_AAOS_LOHS_CREDENTIAL_VERSION=$savedVersion",
+            )
+            return ArdaHotspotIdentity(
+                ssid = requireNotNull(savedSsid),
+                passphrase = requireNotNull(savedPassphrase),
+            )
         }
 
-        val androidId = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ANDROID_ID,
-        ).orEmpty()
-        val suffix = androidId
-            .filter { it.isLetterOrDigit() }
-            .takeLast(4)
-            .uppercase(Locale.US)
-            .ifBlank { "AAOS" }
-        val newIdentity = ArdaHotspotIdentity(
-            ssid = "ARDA-RN3B-$suffix",
-            passphrase = randomAsciiPassphrase(),
+        if (savedSsid != null || savedPassphrase != null || savedVersion != 0) {
+            ArdaPlatformState.log(
+                "ARDA_RN3B_AAOS_LOHS_CREDENTIAL_STATE=INVALID_OR_LEGACY_REGENERATED",
+            )
+        }
+
+        val random = SecureRandom()
+        val identity = ArdaHotspotIdentity(
+            ssid = SSID_PREFIX + randomToken(
+                random = random,
+                alphabet = SSID_ALPHABET,
+                length = SSID_SUFFIX_LENGTH,
+            ),
+            passphrase = randomToken(
+                random = random,
+                alphabet = PASSPHRASE_ALPHABET,
+                length = PASSPHRASE_LENGTH,
+            ),
         )
+        persistIdentity(preferences, identity)
+        ArdaPlatformState.log(
+            "ARDA_RN3B_AAOS_LOHS_CREDENTIAL_SOURCE=FIRST_BOOT_DEVICE_GENERATED",
+        )
+        ArdaPlatformState.log(
+            "ARDA_RN3B_AAOS_LOHS_CREDENTIAL_VERSION=$CREDENTIAL_VERSION",
+        )
+        ArdaPlatformState.log(
+            "ARDA_RN3B_AAOS_LOHS_CREDENTIAL_STABILITY=UNTIL_DATA_RESET",
+        )
+        return identity
+    }
+
+    private fun persistIdentity(
+        preferences: android.content.SharedPreferences,
+        identity: ArdaHotspotIdentity,
+    ) {
         check(
             preferences.edit()
-                .putString(KEY_SSID, newIdentity.ssid)
-                .putString(KEY_PASSPHRASE, newIdentity.passphrase)
+                .putInt(KEY_CREDENTIAL_VERSION, CREDENTIAL_VERSION)
+                .putString(KEY_SSID, identity.ssid)
+                .putString(KEY_PASSPHRASE, identity.passphrase)
                 .commit(),
         ) { "Unable to persist stable ARDA hotspot identity" }
-        return newIdentity
     }
 
-    private fun randomAsciiPassphrase(): String {
-        val alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
-        val random = SecureRandom()
-        return buildString(PASSPHRASE_LENGTH) {
-            repeat(PASSPHRASE_LENGTH) {
-                append(alphabet[random.nextInt(alphabet.length)])
-            }
+    private fun isValidGeneratedSsid(value: String?): Boolean =
+        value != null && GENERATED_SSID_PATTERN.matches(value)
+
+    private fun isValidPassphrase(value: String?): Boolean =
+        value != null && value.length == PASSPHRASE_LENGTH &&
+            value.all { it in PASSPHRASE_ALPHABET }
+
+    private fun randomToken(
+        random: SecureRandom,
+        alphabet: String,
+        length: Int,
+    ): String = buildString(length) {
+        repeat(length) {
+            append(alphabet[random.nextInt(alphabet.length)])
         }
     }
 
+    private fun Throwable.safeMessage(): String =
+        message?.replace('\n', ' ') ?: "no-message"
+
     companion object {
-        private const val HOTSPOT_PREFS = "arda_rn3b_hotspot_identity"
+        private const val HOTSPOT_PREFS = "arda_rn3b_hotspot_identity_v3"
+        private const val KEY_CREDENTIAL_VERSION = "credential_version"
         private const val KEY_SSID = "ssid"
         private const val KEY_PASSPHRASE = "passphrase"
+        private const val CREDENTIAL_VERSION = 1
+        private const val SSID_PREFIX = "ARDA-"
+        private const val SSID_SUFFIX_LENGTH = 8
         private const val PASSPHRASE_LENGTH = 24
+        private const val SSID_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        private const val PASSPHRASE_ALPHABET =
+            "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+        private val GENERATED_SSID_PATTERN = Regex(
+            "^ARDA-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$",
+        )
+        private val MAC_PATTERN = Regex("^[0-9A-F]{2}(:[0-9A-F]{2}){5}$")
     }
 }

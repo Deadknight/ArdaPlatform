@@ -11,7 +11,10 @@ import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.os.UserManager
 import org.json.JSONObject
 import java.io.Closeable
 import java.io.InputStream
@@ -26,56 +29,73 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * Android-framework transport owner for RN-3B.
  *
- * The service owns Bluetooth RFCOMM and the AAOS LocalOnlyHotspot reservation.
- * senderd still owns every phone-facing protocol decision and applies the proxy.
+ * The device-wide singleUser service owns the fixed AAOS LocalOnlyHotspot and
+ * Bluetooth RFCOMM listener. senderd still owns every phone-facing protocol
+ * decision, session state and proxy policy.
  */
 class ArdaBootstrapServerService : Service() {
     private val running = AtomicBoolean(false)
+    private val stopRequested = AtomicBoolean(false)
     private val acceptExecutor = Executors.newSingleThreadExecutor()
     private val pumpExecutor = Executors.newCachedThreadPool()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val restartRunnable = Runnable {
+        if (!stopRequested.get() && !running.get()) {
+            ArdaPlatformState.log("ARDA_RN3B_AAOS_SERVER_RESTART=START")
+            startServer(lastStartIntent)
+        }
+    }
 
     @Volatile private var serverSocket: BluetoothServerSocket? = null
     @Volatile private var bluetoothPeer: BluetoothSocket? = null
     @Volatile private var senderdBridge: Socket? = null
     @Volatile private var hotspotInfo: ArdaHotspotInfo? = null
 
-    private lateinit var hotspotController: ArdaHotspotController
+    @Volatile private var hotspotController: ArdaHotspotController? = null
+    @Volatile private var lastStartIntent: Intent? = null
 
     override fun onCreate() {
         super.onCreate()
-        hotspotController = ArdaHotspotController(applicationContext)
         createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> stopServer()
-            else -> startServer()
+            else -> {
+                stopRequested.set(false)
+                val effectiveIntent = Intent(intent ?: Intent()).setAction(ACTION_START)
+                lastStartIntent = Intent(effectiveIntent)
+                startServer(effectiveIntent)
+            }
         }
         return START_STICKY
     }
 
-    private fun startServer() {
+    private fun startServer(@Suppress("UNUSED_PARAMETER") startIntent: Intent?) {
         if (!running.compareAndSet(false, true)) {
             ArdaPlatformState.log("ARDA_RN3B_AAOS_SERVER_ALREADY_RUNNING=YES")
             return
         }
 
+        // Boot/package receivers use startForegroundService(), so enter the
+        // foreground before resolving persisted hotspot configuration.
         startForeground(notificationId, buildNotification("Starting ARDA local link"))
         ArdaPlatformState.serverRunning.value = true
         ArdaPlatformState.log("ARDA_RN3B_AAOS_ROLE=RFCOMM_AND_LOCAL_ONLY_AP")
+        val coreUser = if (getSystemService(UserManager::class.java)?.isSystemUser == true) 0 else -1
+        ArdaPlatformState.log("ARDA_RN3B_AAOS_CORE_USER=$coreUser")
+        ArdaPlatformState.log("ARDA_RN3B_AAOS_CORE_OWNERSHIP=SINGLE_USER_SYSTEM")
         ArdaPlatformState.log("ARDA_RN3B_AAOS_UUID=${ArdaBluetoothTransport.serviceUuid}")
+
+        hotspotController = ArdaHotspotController(applicationContext)
 
         acceptExecutor.execute {
             try {
-                hotspotInfo = hotspotController.startBlocking(hotspotStartTimeoutMs)
-                if (hotspotInfo == null) {
-                    ArdaPlatformState.log("ARDA_RN3B_AAOS_WIFI_BOOTSTRAP=FAIL")
-                    updateNotification("Bluetooth ready; local Wi-Fi unavailable")
-                } else {
-                    ArdaPlatformState.log("ARDA_RN3B_AAOS_WIFI_BOOTSTRAP=PASS")
-                    updateNotification("Waiting for ARDA companion")
-                }
+                hotspotInfo = hotspotController?.startBlocking(hotspotStartTimeoutMs)
+                require(hotspotInfo != null) { "Fixed ARDA LocalOnlyHotspot unavailable" }
+                ArdaPlatformState.log("ARDA_RN3B_AAOS_WIFI_BOOTSTRAP=PASS")
+                updateNotification("Waiting for ARDA companion")
 
                 val adapter = bluetoothAdapter() ?: error("Bluetooth adapter unavailable")
                 require(adapter.isEnabled) { "Bluetooth adapter disabled" }
@@ -99,6 +119,7 @@ class ArdaBootstrapServerService : Service() {
                     updateNotification("ARDA companion connected")
 
                     try {
+                        refreshHotspotInfoIfNeeded()
                         bridgePeerToSenderd(peer)
                     } catch (error: Throwable) {
                         ArdaPlatformState.log(
@@ -121,12 +142,42 @@ class ArdaBootstrapServerService : Service() {
                         "${error.javaClass.simpleName}:${error.safeMessage()}",
                 )
             } finally {
+                val shouldRestart = !stopRequested.get()
                 closeQuietly(serverSocket)
                 serverSocket = null
+                hotspotController?.close()
+                hotspotController = null
+                hotspotInfo = null
                 running.set(false)
                 ArdaPlatformState.serverRunning.value = false
+                if (shouldRestart) {
+                    scheduleServerRestart()
+                }
             }
         }
+    }
+
+
+    private fun refreshHotspotInfoIfNeeded() {
+        if (hotspotInfo != null) return
+        val controller = hotspotController ?: error("Hotspot controller missing")
+        hotspotInfo = runCatching {
+            controller.startBlocking(hotspotStartTimeoutMs)
+        }.onFailure { error ->
+            ArdaPlatformState.log(
+                "ARDA_RN3B_AAOS_WIFI_REFRESH_ERROR=" +
+                    "${error.javaClass.simpleName}:${error.safeMessage()}",
+            )
+        }.getOrNull()
+        require(hotspotInfo != null) { "Fixed ARDA LocalOnlyHotspot unavailable" }
+    }
+
+    private fun scheduleServerRestart() {
+        ArdaPlatformState.log(
+            "ARDA_RN3B_AAOS_SERVER_RESTART_SCHEDULED=${serverRestartDelayMs}ms",
+        )
+        mainHandler.removeCallbacks(restartRunnable)
+        mainHandler.postDelayed(restartRunnable, serverRestartDelayMs)
     }
 
     private fun bridgePeerToSenderd(peer: BluetoothSocket) {
@@ -248,11 +299,14 @@ class ArdaBootstrapServerService : Service() {
     }
 
     private fun stopServer() {
+        stopRequested.set(true)
+        mainHandler.removeCallbacks(restartRunnable)
         running.set(false)
         closeQuietly(senderdBridge)
         closeQuietly(bluetoothPeer)
         closeQuietly(serverSocket)
-        hotspotController.close()
+        hotspotController?.close()
+        hotspotController = null
         hotspotInfo = null
         senderdBridge = null
         bluetoothPeer = null
@@ -300,11 +354,14 @@ class ArdaBootstrapServerService : Service() {
     }
 
     override fun onDestroy() {
+        stopRequested.set(true)
+        mainHandler.removeCallbacks(restartRunnable)
         running.set(false)
         closeQuietly(senderdBridge)
         closeQuietly(bluetoothPeer)
         closeQuietly(serverSocket)
-        hotspotController.close()
+        hotspotController?.close()
+        hotspotController = null
         acceptExecutor.shutdownNow()
         pumpExecutor.shutdownNow()
         super.onDestroy()
@@ -333,6 +390,7 @@ class ArdaBootstrapServerService : Service() {
             "com.github.deadknight.ardaplatform.action.START_BOOTSTRAP"
         const val ACTION_STOP =
             "com.github.deadknight.ardaplatform.action.STOP_BOOTSTRAP"
+        const val EXTRA_START_SOURCE = "arda_start_source"
 
         private const val channelId = "arda_bt_bootstrap"
         private const val notificationId = 3103
@@ -340,5 +398,6 @@ class ArdaBootstrapServerService : Service() {
         private const val hotspotStartTimeoutMs = 20_000L
         private const val maxBridgeTokenBytes = 512
         private const val platformWifiRequestId = 0x4152444157494649L
+        private const val serverRestartDelayMs = 2_000L
     }
 }
