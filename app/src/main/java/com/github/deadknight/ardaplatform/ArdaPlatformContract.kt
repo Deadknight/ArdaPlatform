@@ -28,4 +28,21 @@ object ArdaPlatformContract {
 
     const val methodEnsureStarted = "ensure_started"
     const val methodReloadConfig = "reload_config"
+
+    const val methodVehicleSourcesList = "vehicle_sources_list"
+    const val methodVehicleSourcesRescan = "vehicle_sources_rescan"
+    const val methodVehicleSourcesApprove = "vehicle_sources_approve"
+    const val methodVehicleSourcesRevoke = "vehicle_sources_revoke"
+    const val methodVehicleSourcesSetEnabled = "vehicle_sources_set_enabled"
+
+    const val extraUserId = "user_id"
+    const val extraSources = "sources"
+    const val extraError = "error"
+    const val extraComponent = "component"
+    const val extraPriority = "priority"
+    const val extraEnabled = "enabled"
+    const val extraPublishCapabilities = "publish_capabilities"
+    const val extraCommandCapabilities = "command_capabilities"
+    const val extraPublishProperties = "publish_properties"
+    const val extraCommandProperties = "command_properties"
 }

@@ -8,6 +8,8 @@ import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
 import android.os.Bundle
+import com.arda.vehicle.admin.VehicleSourceGrantRequest
+import com.arda.vehicle.admin.VehicleSourceInfo
 
 /**
  * Signature-protected single-user bridge for the foreground driver UI.
@@ -18,7 +20,10 @@ import android.os.Bundle
  */
 class ArdaPlatformProvider : ContentProvider() {
     override fun onCreate(): Boolean {
-        context?.let { ArdaBridgeConfigStore.ensureRuntimeConfig(it) }
+        context?.let {
+            ArdaBridgeConfigStore.ensureRuntimeConfig(it)
+            VehicleSourceManagerClient.connect(it)
+        }
         return true
     }
 
@@ -110,9 +115,125 @@ class ArdaPlatformProvider : ContentProvider() {
                 )
             }
 
+            ArdaPlatformContract.methodVehicleSourcesList -> {
+                return vehicleSourcesResult {
+                    val userId = requireNotNull(extras).getInt(
+                        ArdaPlatformContract.extraUserId,
+                    )
+                    val manager = VehicleSourceManagerClient.require(coreContext)
+                    val items = ArrayList<Bundle>()
+                    manager.listSources(userId).orEmpty().forEach { info ->
+                        items += info.toBundle()
+                    }
+                    Bundle().apply {
+                        putParcelableArrayList(ArdaPlatformContract.extraSources, items)
+                    }
+                }
+            }
+
+            ArdaPlatformContract.methodVehicleSourcesRescan -> {
+                return vehicleSourcesResult {
+                    val userId = requireNotNull(extras).getInt(
+                        ArdaPlatformContract.extraUserId,
+                    )
+                    VehicleSourceManagerClient.require(coreContext).rescan(userId)
+                    Bundle.EMPTY
+                }
+            }
+
+            ArdaPlatformContract.methodVehicleSourcesApprove -> {
+                return vehicleSourcesResult {
+                    val data = requireNotNull(extras)
+                    val request = VehicleSourceGrantRequest().apply {
+                        userId = data.getInt(ArdaPlatformContract.extraUserId)
+                        componentName = requireNotNull(
+                            data.getString(ArdaPlatformContract.extraComponent),
+                        )
+                        priority = data.getInt(ArdaPlatformContract.extraPriority, 100)
+                        publishCapabilities = data.getIntArray(
+                            ArdaPlatformContract.extraPublishCapabilities,
+                        ) ?: intArrayOf()
+                        commandCapabilities = data.getIntArray(
+                            ArdaPlatformContract.extraCommandCapabilities,
+                        ) ?: intArrayOf()
+                        publishPropertyIds = data.getIntArray(
+                            ArdaPlatformContract.extraPublishProperties,
+                        ) ?: intArrayOf()
+                        commandPropertyIds = data.getIntArray(
+                            ArdaPlatformContract.extraCommandProperties,
+                        ) ?: intArrayOf()
+                    }
+                    VehicleSourceManagerClient.require(coreContext).approveSource(request)
+                    Bundle.EMPTY
+                }
+            }
+
+            ArdaPlatformContract.methodVehicleSourcesRevoke -> {
+                return vehicleSourcesResult {
+                    val data = requireNotNull(extras)
+                    VehicleSourceManagerClient.require(coreContext).revokeSource(
+                        data.getInt(ArdaPlatformContract.extraUserId),
+                        requireNotNull(data.getString(ArdaPlatformContract.extraComponent)),
+                    )
+                    Bundle.EMPTY
+                }
+            }
+
+            ArdaPlatformContract.methodVehicleSourcesSetEnabled -> {
+                return vehicleSourcesResult {
+                    val data = requireNotNull(extras)
+                    VehicleSourceManagerClient.require(coreContext).setSourceEnabled(
+                        data.getInt(ArdaPlatformContract.extraUserId),
+                        requireNotNull(data.getString(ArdaPlatformContract.extraComponent)),
+                        data.getBoolean(ArdaPlatformContract.extraEnabled),
+                    )
+                    Bundle.EMPTY
+                }
+            }
+
             else -> return super.call(method, arg, extras)
         }
         return Bundle.EMPTY
+    }
+
+    private inline fun vehicleSourcesResult(block: () -> Bundle): Bundle =
+        runCatching(block).getOrElse { error ->
+            Bundle().apply {
+                putString(
+                    ArdaPlatformContract.extraError,
+                    error.message ?: error.javaClass.simpleName,
+                )
+            }
+        }
+
+    private fun VehicleSourceInfo.toBundle(): Bundle = Bundle().apply {
+        putInt(ArdaPlatformContract.extraUserId, userId)
+        putString("package_name", packageName)
+        putString(ArdaPlatformContract.extraComponent, componentName)
+        putString("adapter_id", adapterId)
+        putString("display_name", displayName)
+        putInt("uid", uid)
+        putInt("api_version", apiVersion)
+        putString("signer_summary", signerSummary)
+        putInt("requested_priority", requestedPriority)
+        putInt(ArdaPlatformContract.extraPriority, effectivePriority)
+        putInt("source_id", sourceId)
+        putIntArray("requested_publish_capabilities", requestedPublishCapabilities)
+        putIntArray("requested_command_capabilities", requestedCommandCapabilities)
+        putIntArray("requested_publish_properties", requestedPublishPropertyIds)
+        putIntArray("requested_command_properties", requestedCommandPropertyIds)
+        putIntArray("granted_publish_capabilities", grantedPublishCapabilities)
+        putIntArray("granted_command_capabilities", grantedCommandCapabilities)
+        putIntArray("granted_publish_properties", grantedPublishPropertyIds)
+        putIntArray("granted_command_properties", grantedCommandPropertyIds)
+        putString("state", state)
+        putBoolean(ArdaPlatformContract.extraEnabled, enabled)
+        putBoolean("connected", connected)
+        putBoolean("ready", ready)
+        putBoolean("router_registered", routerRegistered)
+        putInt("pending_signals", pendingSignals)
+        putBoolean("additional_approval", additionalApproval)
+        putString("last_error", lastError)
     }
 
     override fun getType(uri: Uri): String =

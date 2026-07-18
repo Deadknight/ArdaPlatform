@@ -101,6 +101,7 @@ private enum class PlatformTab(
 ) {
     Status(R.string.tab_status, R.string.tab_status_glyph),
     Settings(R.string.tab_configuration, R.string.tab_configuration_glyph),
+    VehicleSources(R.string.tab_vehicle_sources, R.string.tab_vehicle_sources_glyph),
 }
 
 @Composable
@@ -110,11 +111,15 @@ fun ArdaPlatformApp() {
     var snapshot by remember {
         mutableStateOf(ArdaPlatformRepository.loadSnapshot(context))
     }
+    var vehicleSources by remember {
+        mutableStateOf(VehicleSourcesRepository.load(context))
+    }
 
     LaunchedEffect(Unit) {
         ArdaPlatformRepository.ensureCoreStarted(context)
         while (isActive) {
             snapshot = ArdaPlatformRepository.loadSnapshot(context)
+            vehicleSources = VehicleSourcesRepository.load(context)
             delay(1_000)
         }
     }
@@ -146,6 +151,12 @@ fun ArdaPlatformApp() {
                     PlatformTab.Settings -> ConfigScreen(
                         snapshot = snapshot,
                         onSnapshotChanged = { snapshot = it },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+
+                    PlatformTab.VehicleSources -> VehicleSourcesScreen(
+                        state = vehicleSources,
+                        onRefresh = { vehicleSources = VehicleSourcesRepository.load(context) },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
