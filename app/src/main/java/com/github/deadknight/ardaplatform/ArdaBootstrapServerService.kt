@@ -131,9 +131,11 @@ class ArdaBootstrapServerService : Service() {
                         while (running.get()) {
                             val peer = serverSocket?.accept() ?: break
                             bluetoothPeer = peer
+                            val peerAddress = safePeerAddress(peer)
                             ArdaPlatformState.peerConnected.value = true
+                            ArdaPlatformState.peerAddress.value = peerAddress
                             ArdaPlatformState.log(
-                                "ARDA_RN3B_AAOS_PEER_CONNECTED=${safePeerAddress(peer)}",
+                                "ARDA_RN3B_AAOS_PEER_CONNECTED=$peerAddress",
                             )
                             updateNotification("ARDA companion connected")
 
@@ -151,6 +153,8 @@ class ArdaBootstrapServerService : Service() {
                                 senderdBridge = null
                                 bluetoothPeer = null
                                 ArdaPlatformState.peerConnected.value = false
+                                ArdaPlatformState.peerAddress.value = null
+                                ArdaPlatformState.bridgeConnected.value = false
                                 updateNotification("Waiting for ARDA companion")
                                 ArdaPlatformState.log("ARDA_RN3B_AAOS_PEER_DISCONNECTED=YES")
                             }
@@ -261,6 +265,7 @@ class ArdaBootstrapServerService : Service() {
         ArdaPlatformState.log("ARDA_RN3B_AAOS_SENDERD_BRIDGE_CONNECT_GATE=PASS")
 
         authenticateBridge(bridge, config.token)
+        ArdaPlatformState.bridgeConnected.value = true
         ArdaPlatformState.log("ARDA_RN3B_AAOS_SENDERD_BRIDGE_AUTH=PASS")
 
         registerHotspotWithSenderd(bridge, hotspotInfo)
@@ -365,6 +370,7 @@ class ArdaBootstrapServerService : Service() {
         stopRequested.set(true)
         mainHandler.removeCallbacks(restartRunnable)
         running.set(false)
+        ArdaPlatformState.bridgeConnected.value = false
         closeQuietly(senderdBridge)
         closeQuietly(bluetoothPeer)
         closeQuietly(serverSocket)
@@ -375,6 +381,8 @@ class ArdaBootstrapServerService : Service() {
         bluetoothPeer = null
         serverSocket = null
         ArdaPlatformState.peerConnected.value = false
+        ArdaPlatformState.peerAddress.value = null
+        ArdaPlatformState.bridgeConnected.value = false
         ArdaPlatformState.serverRunning.value = false
         ArdaPlatformState.log("ARDA_RN3B_AAOS_SERVER_STOPPED=YES")
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -420,6 +428,10 @@ class ArdaBootstrapServerService : Service() {
         stopRequested.set(true)
         mainHandler.removeCallbacks(restartRunnable)
         running.set(false)
+        ArdaPlatformState.serverRunning.value = false
+        ArdaPlatformState.peerConnected.value = false
+        ArdaPlatformState.peerAddress.value = null
+        ArdaPlatformState.bridgeConnected.value = false
         closeQuietly(senderdBridge)
         closeQuietly(bluetoothPeer)
         closeQuietly(serverSocket)

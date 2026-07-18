@@ -80,6 +80,9 @@ class ArdaHotspotController(context: Context) : Closeable {
                 result.set(info)
                 ArdaPlatformState.hotspotReady.value = true
                 ArdaPlatformState.hotspotSsid.value = info.ssid
+                ArdaPlatformState.hotspotBssid.value = info.bssid
+                ArdaPlatformState.hotspotIp.value = info.apIp
+                ArdaPlatformState.hotspotSecurity.value = info.security
                 ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_CONFIG_MODE=PLATFORM_SINGLE_USER_FIXED")
                 ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_STABLE_CONFIG_GATE=PASS")
                 ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_IDENTITY=DEVICE_OWNED_STABLE")
@@ -96,6 +99,9 @@ class ArdaHotspotController(context: Context) : Closeable {
                 currentInfo = null
                 ArdaPlatformState.hotspotReady.value = false
                 ArdaPlatformState.hotspotSsid.value = null
+                ArdaPlatformState.hotspotBssid.value = null
+                ArdaPlatformState.hotspotIp.value = null
+                ArdaPlatformState.hotspotSecurity.value = null
                 ArdaPlatformState.log("ARDA_RN3B_AAOS_LOHS_STOPPED=YES")
             }
 
@@ -331,6 +337,9 @@ class ArdaHotspotController(context: Context) : Closeable {
         currentInfo = null
         ArdaPlatformState.hotspotReady.value = false
         ArdaPlatformState.hotspotSsid.value = null
+        ArdaPlatformState.hotspotBssid.value = null
+        ArdaPlatformState.hotspotIp.value = null
+        ArdaPlatformState.hotspotSecurity.value = null
         callbackExecutor.shutdownNow()
     }
 

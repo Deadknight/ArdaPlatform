@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-feature android:name="android.hardware.bluetooth" android:required="true" />
 
+    <permission
+        android:name="${applicationId}.permission.MANAGE_ARDA_PLATFORM"
+        android:protectionLevel="signature|privileged" />
+
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
@@ -22,6 +26,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.INTERACT_ACROSS_USERS" />
     <uses-permission android:name="android.permission.INTERACT_ACROSS_USERS_FULL" />
+    <uses-permission android:name="${applicationId}.permission.MANAGE_ARDA_PLATFORM" />
 
     <application
         android:allowBackup="false"
@@ -34,12 +39,23 @@
 
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <provider
+            android:name=".ArdaPlatformProvider"
+            android:authorities="${applicationId}.provider"
+            android:directBootAware="true"
+            android:exported="true"
+            android:readPermission="${applicationId}.permission.MANAGE_ARDA_PLATFORM"
+            android:singleUser="true"
+            android:writePermission="${applicationId}.permission.MANAGE_ARDA_PLATFORM" />
 
         <service
             android:name=".ArdaBootstrapServerService"
