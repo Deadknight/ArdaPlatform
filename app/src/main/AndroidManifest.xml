@@ -47,6 +47,10 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <meta-data
+                android:name="distractionOptimized"
+                android:value="true" />
+
         </activity>
 
         <provider
@@ -57,6 +61,15 @@
             android:readPermission="${applicationId}.permission.MANAGE_ARDA_PLATFORM"
             android:singleUser="true"
             android:writePermission="${applicationId}.permission.MANAGE_ARDA_PLATFORM" />
+
+        <!-- Access is default-deny in MapsEnergyProvider: CAR_ENERGY for Maps,
+             MANAGE_ARDA_PLATFORM/root/shell/same-app for administration. -->
+        <provider
+            android:name=".MapsEnergyProvider"
+            android:authorities="google_maps_energy"
+            android:directBootAware="true"
+            android:exported="true"
+            android:grantUriPermissions="false" />
 
         <service
             android:name=".ArdaBootstrapServerService"

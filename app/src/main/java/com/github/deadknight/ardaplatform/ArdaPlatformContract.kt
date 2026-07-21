@@ -35,6 +35,13 @@ object ArdaPlatformContract {
     const val methodVehicleSourcesRevoke = "vehicle_sources_revoke"
     const val methodVehicleSourcesSetEnabled = "vehicle_sources_set_enabled"
 
+    const val methodVemStatus = "vem_status"
+    const val methodVemSetBatteryPercent = "vem_set_battery_percent"
+    const val methodVemSetFuelType = "vem_set_fuel_type"
+    const val methodVemSetConnectorTypes = "vem_set_connector_types"
+    const val methodVemClearModel = "vem_clear_model"
+    const val methodVemNotifyModel = "vem_notify_model"
+
     const val extraUserId = "user_id"
     const val extraSources = "sources"
     const val extraError = "error"

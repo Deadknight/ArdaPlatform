@@ -39,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -102,6 +103,7 @@ private enum class PlatformTab(
     Status(R.string.tab_status, R.string.tab_status_glyph),
     Settings(R.string.tab_configuration, R.string.tab_configuration_glyph),
     VehicleSources(R.string.tab_vehicle_sources, R.string.tab_vehicle_sources_glyph),
+    Energy(R.string.tab_vehicle_energy, R.string.tab_vehicle_energy_glyph),
 }
 
 @Composable
@@ -113,6 +115,13 @@ fun ArdaPlatformApp() {
     }
     var vehicleSources by remember {
         mutableStateOf(VehicleSourcesRepository.load(context))
+    }
+    val vehicleEnergyViewModel = remember(context.applicationContext) {
+        VehicleEnergyViewModel(context.applicationContext)
+    }
+
+    DisposableEffect(vehicleEnergyViewModel) {
+        onDispose { vehicleEnergyViewModel.close() }
     }
 
     LaunchedEffect(Unit) {
@@ -157,6 +166,11 @@ fun ArdaPlatformApp() {
                     PlatformTab.VehicleSources -> VehicleSourcesScreen(
                         state = vehicleSources,
                         onRefresh = { vehicleSources = VehicleSourcesRepository.load(context) },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+
+                    PlatformTab.Energy -> VehicleEnergyScreen(
+                        viewModel = vehicleEnergyViewModel,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -214,7 +228,7 @@ private fun PlatformBottomBar(
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 20.dp),
+                            .padding(horizontal = 10.dp),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -222,7 +236,7 @@ private fun PlatformBottomBar(
                             color = if (selected) primary else divider,
                             contentColor = if (selected) Color(0xFF06201D) else textPrimary,
                             shape = CircleShape,
-                            modifier = Modifier.size(30.dp),
+                            modifier = Modifier.size(26.dp),
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Text(
@@ -233,11 +247,11 @@ private fun PlatformBottomBar(
                             }
                         }
 
-                        Spacer(Modifier.width(12.dp))
+                        Spacer(Modifier.width(8.dp))
 
                         Text(
                             text = stringResource(tab.titleRes),
-                            fontSize = 17.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (selected) primary else textPrimary,
                             maxLines = 1,

@@ -7,6 +7,7 @@ import android.content.UriMatcher
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
+import android.os.Binder
 import android.os.Bundle
 import com.arda.vehicle.admin.VehicleSourceGrantRequest
 import com.arda.vehicle.admin.VehicleSourceInfo
@@ -191,9 +192,85 @@ class ArdaPlatformProvider : ContentProvider() {
                 }
             }
 
+            ArdaPlatformContract.methodVemStatus -> {
+                return vehicleEnergyResult(
+                    coreContext,
+                    VehicleEnergyContract.methodStatus,
+                    extras,
+                )
+            }
+
+            ArdaPlatformContract.methodVemSetBatteryPercent -> {
+                return vehicleEnergyResult(
+                    coreContext,
+                    VehicleEnergyContract.methodSetBatteryPercent,
+                    extras,
+                )
+            }
+
+            ArdaPlatformContract.methodVemSetFuelType -> {
+                return vehicleEnergyResult(
+                    coreContext,
+                    VehicleEnergyContract.methodSetFuelType,
+                    extras,
+                )
+            }
+
+            ArdaPlatformContract.methodVemSetConnectorTypes -> {
+                return vehicleEnergyResult(
+                    coreContext,
+                    VehicleEnergyContract.methodSetConnectorTypes,
+                    extras,
+                )
+            }
+
+            ArdaPlatformContract.methodVemClearModel -> {
+                return vehicleEnergyResult(
+                    coreContext,
+                    VehicleEnergyContract.methodClearModel,
+                    extras,
+                )
+            }
+
+            ArdaPlatformContract.methodVemNotifyModel -> {
+                return vehicleEnergyResult(
+                    coreContext,
+                    VehicleEnergyContract.methodNotifyModel,
+                    extras,
+                )
+            }
+
             else -> return super.call(method, arg, extras)
         }
         return Bundle.EMPTY
+    }
+
+
+    private fun vehicleEnergyResult(
+        coreContext: android.content.Context,
+        method: String,
+        extras: Bundle?,
+    ): Bundle = runCatching {
+        val callerUserId = Binder.getCallingUid() / perUserRange
+        val targetUserId = extras?.getInt(
+            ArdaPlatformContract.extraUserId,
+            callerUserId,
+        ) ?: callerUserId
+        require(targetUserId >= 0) { "Invalid target user: $targetUserId" }
+
+        coreContext.contentResolver.call(
+            VehicleEnergyContract.rootUriForUser(targetUserId),
+            method,
+            null,
+            Bundle(extras ?: Bundle.EMPTY),
+        ) ?: Bundle.EMPTY
+    }.getOrElse { error ->
+        Bundle().apply {
+            putString(
+                ArdaPlatformContract.extraError,
+                error.message ?: error.javaClass.simpleName,
+            )
+        }
     }
 
     private inline fun vehicleSourcesResult(block: () -> Bundle): Bundle =
@@ -259,6 +336,7 @@ class ArdaPlatformProvider : ContentProvider() {
         }
 
     companion object {
+        private const val perUserRange = 100_000
         private const val matchSnapshot = 1
         private val matcher = UriMatcher(UriMatcher.NO_MATCH).apply {
             addURI(ArdaPlatformContract.authority, "snapshot", matchSnapshot)

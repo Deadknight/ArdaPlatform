@@ -6,9 +6,11 @@
     <string name="tab_status">Status</string>
     <string name="tab_configuration">Configuration</string>
     <string name="tab_vehicle_sources">Vehicle Sources</string>
+    <string name="tab_vehicle_energy">Energy</string>
     <string name="tab_status_glyph">S</string>
     <string name="tab_configuration_glyph">C</string>
     <string name="tab_vehicle_sources_glyph">V</string>
+    <string name="tab_vehicle_energy_glyph">EV</string>
 
     <string name="status_attention_required">Attention required</string>
     <string name="status_connectivity_core_ready">Connectivity core ready</string>
