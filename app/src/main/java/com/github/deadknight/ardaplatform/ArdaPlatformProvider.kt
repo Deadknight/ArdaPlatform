@@ -240,6 +240,78 @@ class ArdaPlatformProvider : ContentProvider() {
                 )
             }
 
+            ArdaPlatformContract.methodVehicleProfileApply -> {
+                val data = requireNotNull(extras)
+                val targetUserId = data.getInt(ArdaPlatformContract.extraUserId, -1)
+                require(targetUserId >= 0) { "Invalid target user: $targetUserId" }
+
+                val fuelTypeValue = data.getInt(
+                    ArdaPlatformContract.extraFuelTypeValue,
+                    Int.MIN_VALUE,
+                )
+                val fuelType = ConfiguredFuelType.entries.firstOrNull {
+                    it.vhalValue == fuelTypeValue
+                } ?: error("Unsupported fuel type value: $fuelTypeValue")
+
+                val requestedConnectors: IntArray = data.getIntArray(
+                    ArdaPlatformContract.extraConnectorTypeValues,
+                ) ?: intArrayOf()
+                val connectorValues = if (fuelType.enablesEnergyModel) {
+                    val effectiveConnectors = if (requestedConnectors.isEmpty()) {
+                        intArrayOf(ConfiguredEvConnectorType.Unknown.vhalValue)
+                    } else {
+                        requestedConnectors
+                    }
+                    effectiveConnectors.distinct().sorted()
+                } else {
+                    listOf(ConfiguredEvConnectorType.Unknown.vhalValue)
+                }
+                connectorValues.forEach { value ->
+                    require(ConfiguredEvConnectorType.entries.any { it.vhalValue == value }) {
+                        "Unsupported connector value: $value"
+                    }
+                }
+
+                val applying = VehicleProfileRuntimeStore.beginApply(
+                    coreContext,
+                    targetUserId,
+                    fuelType.vhalValue,
+                    connectorValues,
+                )
+                return runCatching {
+                    VehicleSourceManagerClient.require(coreContext).applyVehicleInfo(
+                        targetUserId,
+                        intArrayOf(fuelType.vhalValue),
+                        connectorValues.toIntArray(),
+                    )
+                    val notifyResult = vehicleEnergyResult(
+                        coreContext,
+                        VehicleEnergyContract.methodNotifyModel,
+                        Bundle().apply {
+                            putInt(ArdaPlatformContract.extraUserId, targetUserId)
+                        },
+                    )
+                    notifyResult.getString(VehicleEnergyContract.extraError)?.let(::error)
+                    VehicleProfileRuntimeStore.complete(
+                        coreContext,
+                        applying,
+                        VehicleProfileRuntimeState.Pass,
+                        "Fuel and connector values applied; CarService refreshed; energy model notified. Maps refresh is best effort.",
+                    ).toBundle()
+                }.getOrElse { failure ->
+                    VehicleProfileRuntimeStore.complete(
+                        coreContext,
+                        applying,
+                        VehicleProfileRuntimeState.Fail,
+                        failure.message ?: failure.javaClass.simpleName,
+                    ).toBundle()
+                }
+            }
+
+            ArdaPlatformContract.methodVehicleProfileStatus -> {
+                return VehicleProfileRuntimeStore.statusBundle(coreContext)
+            }
+
             else -> return super.call(method, arg, extras)
         }
         return Bundle.EMPTY

@@ -174,6 +174,10 @@ object VehicleEnergyStore {
             VehicleEnergyContract.resultConnectorTypes,
             ArrayList(connectorTypes.map { it.wireName }),
         )
+        putString(
+            VehicleEnergyContract.resultConnectorTypesCsv,
+            connectorTypes.sortedBy { it.vhalValue }.joinToString(",") { it.wireName },
+        )
         putString(VehicleEnergyContract.resultSelectedVehicle, selectedVehicle)
         putBoolean(VehicleEnergyContract.resultNotifySent, notifySent)
     }

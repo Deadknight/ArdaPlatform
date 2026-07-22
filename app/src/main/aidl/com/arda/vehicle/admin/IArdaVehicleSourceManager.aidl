@@ -9,4 +9,5 @@ interface IArdaVehicleSourceManager {
     void approveSource(in VehicleSourceGrantRequest request);
     void revokeSource(int userId, String componentName);
     void setSourceEnabled(int userId, String componentName, boolean enabled);
+    void applyVehicleInfo(int userId, in int[] fuelTypes, in int[] connectorTypes);
 }

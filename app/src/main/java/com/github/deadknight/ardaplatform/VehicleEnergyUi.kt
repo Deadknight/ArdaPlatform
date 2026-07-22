@@ -82,7 +82,13 @@ fun VehicleEnergyScreen(
                 item {
                     ChargingConnectorCard(viewModel)
                 }
+            }
 
+            item {
+                VehicleProfileApplyCard(viewModel)
+            }
+
+            if (viewModel.fuelType.enablesEnergyModel) {
                 item {
                     ModelStatusCard(viewModel)
                 }
@@ -183,13 +189,11 @@ private fun FuelTypeCard(viewModel: VehicleEnergyViewModel) {
             color = energySecondary,
             fontSize = 13.sp,
         )
-        if (viewModel.fuelType.enablesEnergyModel) {
-            Text(
-                text = "The ArdaPlatform selection is saved immediately. Maps still requires VHAL INFO_FUEL_TYPE to report exactly [ELECTRIC].",
-                color = energySecondary,
-                fontSize = 13.sp,
-            )
-        }
+        Text(
+            text = "The selection is saved immediately. Apply publishes it through ArdaVehicleManager and the authenticated vehicle router.",
+            color = energySecondary,
+            fontSize = 13.sp,
+        )
     }
 }
 
@@ -243,7 +247,96 @@ private fun ChargingConnectorCard(viewModel: VehicleEnergyViewModel) {
             fontSize = 13.sp,
         )
         Text(
-            text = "Stored as INFO_EV_CONNECTOR_TYPE-compatible values. Applying them to the live VHAL still requires the VHAL override bridge.",
+            text = "Stored as INFO_EV_CONNECTOR_TYPE-compatible values and applied together with the fuel type.",
+            color = energySecondary,
+            fontSize = 12.sp,
+        )
+    }
+}
+
+@Composable
+private fun VehicleProfileApplyCard(viewModel: VehicleEnergyViewModel) {
+    val runtime = viewModel.runtimeStatus
+    val stateText = when (runtime.state) {
+        VehicleProfileRuntimeState.Idle -> "Not applied yet"
+        VehicleProfileRuntimeState.Pending -> "Queued"
+        VehicleProfileRuntimeState.Applying -> "Applying"
+        VehicleProfileRuntimeState.Pass -> "Applied"
+        VehicleProfileRuntimeState.Fail -> "Failed"
+    }
+    val stateColor = when (runtime.state) {
+        VehicleProfileRuntimeState.Fail -> energyDanger
+        VehicleProfileRuntimeState.Pass -> energyPrimary
+        else -> energySecondary
+    }
+
+    EnergyCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "Live vehicle profile",
+                    color = energyText,
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "Publishes fuel and connector types through the Manager/router/VHAL path, refreshes CarService, restarts Maps and notifies the energy model.",
+                    color = energySecondary,
+                    fontSize = 14.sp,
+                )
+            }
+            TextButton(onClick = viewModel::refreshRuntimeStatus) {
+                Text("Refresh")
+            }
+        }
+
+        HorizontalDivider(color = energyDivider)
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stateText,
+                    color = stateColor,
+                    fontWeight = FontWeight.Bold,
+                )
+                runtime.detail?.takeIf(String::isNotBlank)?.let { detail ->
+                    Text(
+                        text = detail,
+                        color = energySecondary,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+            Button(
+                onClick = viewModel::applyVehicleProfile,
+                enabled = !viewModel.loading,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = energyPrimary,
+                    contentColor = Color(0xFF06201D),
+                ),
+            ) {
+                val buttonText = if (viewModel.loading) {
+                    "Applying…"
+                } else {
+                    "Apply vehicle profile"
+                }
+                Text(
+                    buttonText,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+
+        Text(
+            text = "The launcher can disappear briefly while CarService restarts. The Manager persists the last applied profile and restores it after reboot.",
             color = energySecondary,
             fontSize = 12.sp,
         )

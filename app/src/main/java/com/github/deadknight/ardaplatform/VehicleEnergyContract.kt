@@ -40,6 +40,7 @@ object VehicleEnergyContract {
     const val resultBatteryPercent = "battery_percent"
     const val resultFuelType = "fuel_type"
     const val resultConnectorTypes = "connector_types"
+    const val resultConnectorTypesCsv = "connector_types_csv"
     const val resultSelectedVehicle = "selected_vehicle"
     const val resultNotifySent = "notify_sent"
 }

@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /** Compose-facing state holder adapted from the supplied EvViewModel flow. */
@@ -33,6 +34,13 @@ class VehicleEnergyViewModel(
         private set
     var error by mutableStateOf<String?>(null)
         private set
+    var runtimeStatus by mutableStateOf(
+        ArdaPlatformRepository.loadVehicleProfileRuntimeStatus(appContext),
+    )
+        private set
+
+    val runtimeApplying: Boolean
+        get() = loading
 
     var makers by mutableStateOf<List<String>>(emptyList())
         private set
@@ -75,6 +83,7 @@ class VehicleEnergyViewModel(
         fuelType = status.fuelType
         batteryPercentText = status.batteryPercent?.toString() ?: ""
         selectedConnectorTypes = status.connectorTypes
+        runtimeStatus = ArdaPlatformRepository.loadVehicleProfileRuntimeStatus(appContext)
         if (initialized) return
         initialized = true
         if (fuelType.enablesEnergyModel) {
@@ -87,15 +96,55 @@ class VehicleEnergyViewModel(
         fuelType = status.fuelType
         batteryPercentText = status.batteryPercent?.toString() ?: ""
         selectedConnectorTypes = status.connectorTypes
+        runtimeStatus = ArdaPlatformRepository.loadVehicleProfileRuntimeStatus(appContext)
+    }
+
+    fun refreshRuntimeStatus() {
+        runtimeStatus = ArdaPlatformRepository.loadVehicleProfileRuntimeStatus(appContext)
+    }
+
+    fun applyVehicleProfile() {
+        if (loading) return
+        loading = true
+        error = null
+        message = "Applying vehicle profile. The launcher and Maps may briefly restart."
+        scope.launch {
+            try {
+                runtimeStatus = withContext(Dispatchers.IO) {
+                    ArdaPlatformRepository.requestVehicleProfileApply(
+                        appContext,
+                        fuelType,
+                        selectedConnectorTypes,
+                    )
+                }
+                when (runtimeStatus.state) {
+                    VehicleProfileRuntimeState.Pass -> {
+                        message = "Vehicle profile applied. Maps reloaded the energy model."
+                    }
+                    VehicleProfileRuntimeState.Fail -> {
+                        error = runtimeStatus.detail ?: "Vehicle profile apply failed."
+                        message = null
+                    }
+                    else -> {
+                        message = runtimeStatus.detail
+                    }
+                }
+            } catch (throwable: Throwable) {
+                error = throwable.message ?: throwable.javaClass.simpleName
+                message = null
+            } finally {
+                loading = false
+            }
+        }
     }
 
     fun selectFuelType(value: ConfiguredFuelType) {
         fuelType = value
         status = VehicleEnergyStore.setFuelType(appContext, value)
         message = if (value.enablesEnergyModel) {
-            "Electric selected. Vehicle-model, connector and battery controls are enabled."
+            "Electric selected. Vehicle-model, connector and battery controls are enabled. Apply the vehicle profile when ready."
         } else {
-            "${value.displayName} selected. Electric-only controls are hidden; the installed model is preserved."
+            "${value.displayName} selected. Electric-only controls are hidden; the installed model is preserved. Apply the vehicle profile when ready."
         }
         error = null
         if (value.enablesEnergyModel && makers.isEmpty()) {
@@ -112,7 +161,7 @@ class VehicleEnergyViewModel(
         message = if (updated.isEmpty()) {
             "No charging connector selected."
         } else {
-            "Charging connectors updated."
+            "Charging connectors updated. Apply the vehicle profile when ready."
         }
         error = null
     }
@@ -120,7 +169,7 @@ class VehicleEnergyViewModel(
     fun clearConnectorTypes() {
         selectedConnectorTypes = emptySet()
         status = VehicleEnergyStore.setConnectorTypes(appContext, emptySet())
-        message = "Charging connector selection cleared."
+        message = "Charging connector selection cleared. Apply the vehicle profile when ready."
         error = null
     }
 

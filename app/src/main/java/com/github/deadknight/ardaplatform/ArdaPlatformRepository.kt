@@ -3,6 +3,8 @@ package com.github.deadknight.ardaplatform
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
+import android.os.Process
 import android.database.Cursor
 
 data class ArdaPlatformSnapshot(
@@ -23,6 +25,7 @@ data class ArdaPlatformSnapshot(
 
 /** UI-side access to the single-user provider, with a local fallback for previews. */
 object ArdaPlatformRepository {
+    private const val perUserRange = 100_000
     fun ensureCoreStarted(context: Context) {
         val called = runCatching {
             context.contentResolver.call(
@@ -58,6 +61,49 @@ object ArdaPlatformRepository {
             }
         }.getOrNull()
         return providerSnapshot ?: localSnapshot(context)
+    }
+
+
+    fun requestVehicleProfileApply(
+        context: Context,
+        fuelType: ConfiguredFuelType,
+        connectorTypes: Set<ConfiguredEvConnectorType>,
+    ): VehicleProfileRuntimeStatus {
+        val result = context.contentResolver.call(
+            ArdaPlatformContract.snapshotUri,
+            ArdaPlatformContract.methodVehicleProfileApply,
+            null,
+            Bundle().apply {
+                putInt(ArdaPlatformContract.extraUserId, currentUserId())
+                putInt(ArdaPlatformContract.extraFuelTypeValue, fuelType.vhalValue)
+                val connectorValues = if (fuelType.enablesEnergyModel) {
+                    connectorTypes.map { it.vhalValue }
+                        .distinct()
+                        .sorted()
+                        .ifEmpty { listOf(ConfiguredEvConnectorType.Unknown.vhalValue) }
+                } else {
+                    listOf(ConfiguredEvConnectorType.Unknown.vhalValue)
+                }
+                putIntArray(
+                    ArdaPlatformContract.extraConnectorTypeValues,
+                    connectorValues.toIntArray(),
+                )
+            },
+        ) ?: error("Vehicle profile provider returned no result")
+        result.getString(ArdaPlatformContract.extraError)?.let(::error)
+        return VehicleProfileRuntimeStatus.fromBundle(result)
+    }
+
+    fun loadVehicleProfileRuntimeStatus(context: Context): VehicleProfileRuntimeStatus {
+        val result = runCatching {
+            context.contentResolver.call(
+                ArdaPlatformContract.snapshotUri,
+                ArdaPlatformContract.methodVehicleProfileStatus,
+                null,
+                null,
+            )
+        }.getOrNull()
+        return VehicleProfileRuntimeStatus.fromBundle(result)
     }
 
     fun saveConfig(context: Context, config: ArdaBridgeConfig) {
@@ -131,6 +177,8 @@ object ArdaPlatformRepository {
             lastError = ArdaPlatformState.lastError.value,
         )
     }
+
+    private fun currentUserId(): Int = Process.myUid() / perUserRange
 
     private fun Cursor.index(name: String): Int =
         getColumnIndexOrThrow(name)

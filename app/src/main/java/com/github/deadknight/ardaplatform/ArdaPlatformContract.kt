@@ -42,6 +42,9 @@ object ArdaPlatformContract {
     const val methodVemClearModel = "vem_clear_model"
     const val methodVemNotifyModel = "vem_notify_model"
 
+    const val methodVehicleProfileApply = "vehicle_profile_apply"
+    const val methodVehicleProfileStatus = "vehicle_profile_status"
+
     const val extraUserId = "user_id"
     const val extraSources = "sources"
     const val extraError = "error"
@@ -52,4 +55,11 @@ object ArdaPlatformContract {
     const val extraCommandCapabilities = "command_capabilities"
     const val extraPublishProperties = "publish_properties"
     const val extraCommandProperties = "command_properties"
+
+    const val extraRequestId = "request_id"
+    const val extraRuntimeState = "runtime_state"
+    const val extraRuntimeDetail = "runtime_detail"
+    const val extraFuelTypeValue = "fuel_type_value"
+    const val extraConnectorTypeValues = "connector_type_values"
+    const val extraUpdatedAtMillis = "updated_at_millis"
 }
