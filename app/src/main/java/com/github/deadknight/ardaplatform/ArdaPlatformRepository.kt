@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.os.Process
+import android.provider.Settings
 import android.database.Cursor
 
 data class ArdaPlatformSnapshot(
@@ -26,6 +27,7 @@ data class ArdaPlatformSnapshot(
 /** UI-side access to the single-user provider, with a local fallback for previews. */
 object ArdaPlatformRepository {
     private const val perUserRange = 100_000
+    private const val bottomHvacVisibleSetting = "arda_bottom_hvac_visible"
     fun ensureCoreStarted(context: Context) {
         val called = runCatching {
             context.contentResolver.call(
@@ -104,6 +106,25 @@ object ArdaPlatformRepository {
             )
         }.getOrNull()
         return VehicleProfileRuntimeStatus.fromBundle(result)
+    }
+
+    fun isBottomHvacVisible(context: Context): Boolean =
+        Settings.Global.getInt(
+            context.contentResolver,
+            bottomHvacVisibleSetting,
+            1,
+        ) != 0
+
+    fun setBottomHvacVisible(context: Context, visible: Boolean) {
+        check(
+            Settings.Global.putInt(
+                context.contentResolver,
+                bottomHvacVisibleSetting,
+                if (visible) 1 else 0,
+            ),
+        ) {
+            "Could not update the bottom HVAC visibility setting."
+        }
     }
 
     fun saveConfig(context: Context, config: ArdaBridgeConfig) {

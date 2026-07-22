@@ -65,6 +65,10 @@
     <string name="keep_profiles_title">Keep Bluetooth profiles connected</string>
     <string name="keep_profiles_description">Keeps phone-call and media profiles connected to AAOS.</string>
 
+    <string name="system_interface_title">System interface</string>
+    <string name="bottom_hvac_visibility_title">Show bottom HVAC controls</string>
+    <string name="bottom_hvac_visibility_description">Shows the driver and passenger temperature controls in the bottom system bar. The navigation bar itself remains visible.</string>
+
     <string name="action_reload_saved">Reload saved</string>
     <string name="action_save_apply">Save &amp; apply</string>
     <string name="configuration_saved">Configuration saved and connectivity daemon reloaded.</string>

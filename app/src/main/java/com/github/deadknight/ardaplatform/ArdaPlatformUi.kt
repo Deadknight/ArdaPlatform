@@ -593,6 +593,9 @@ private fun ConfigScreen(
         mutableStateOf(snapshot.config.keepBluetoothProfilesConnected)
     }
     var showToken by rememberSaveable { mutableStateOf(false) }
+    var bottomHvacVisible by remember {
+        mutableStateOf(ArdaPlatformRepository.isBottomHvacVisible(context))
+    }
     var persisted by remember { mutableStateOf(snapshot.config) }
 
     fun load(config: ArdaBridgeConfig) {
@@ -758,6 +761,44 @@ private fun ConfigScreen(
                             description = stringResource(R.string.keep_profiles_description),
                             checked = keepProfiles,
                             onCheckedChange = { keepProfiles = it },
+                        )
+                    }
+                }
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = surface),
+                    shape = RoundedCornerShape(22.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.padding(24.dp)) {
+                        Text(
+                            text = stringResource(R.string.system_interface_title),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        SettingSwitch(
+                            title = stringResource(R.string.bottom_hvac_visibility_title),
+                            description = stringResource(
+                                R.string.bottom_hvac_visibility_description,
+                            ),
+                            checked = bottomHvacVisible,
+                            onCheckedChange = { visible ->
+                                runCatching {
+                                    ArdaPlatformRepository.setBottomHvacVisible(
+                                        context,
+                                        visible,
+                                    )
+                                }.onSuccess {
+                                    bottomHvacVisible = visible
+                                }.onFailure { error ->
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar(
+                                            error.message ?: saveFailedMessage,
+                                        )
+                                    }
+                                }
+                            },
                         )
                     }
                 }
