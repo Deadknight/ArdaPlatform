@@ -126,4 +126,11 @@
     <string name="vehicle_property_toll_card_status">Electronic toll card status</string>
     <string name="vehicle_property_unknown">Vehicle property %1$d</string>
 
+    <string name="video_configuration_title">Android Auto video</string>
+    <string name="video_configuration_description">Force a head-unit video resolution for the next AAP session. Auto selects the highest locally compatible quality, currently up to 1280×720.</string>
+    <string name="video_force_label">Forced video configuration</string>
+    <string name="video_force_auto">Auto · best compatible</string>
+    <string name="video_waiting_for_sdr">Waiting for the first Service Discovery Response.</string>
+    <string name="video_last_selected_format">Last selected: %1$s @ %2$d fps · policy %3$s</string>
+
 </resources>

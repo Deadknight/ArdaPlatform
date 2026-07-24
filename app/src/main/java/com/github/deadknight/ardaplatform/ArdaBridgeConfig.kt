@@ -12,6 +12,7 @@ data class ArdaBridgeConfig(
     val token: String,
     val keepBootstrapRfcommOpen: Boolean = true,
     val keepBluetoothProfilesConnected: Boolean = true,
+    val forcedVideoResolution: String = "",
 )
 
 object ArdaBridgeConfigStore {
@@ -49,6 +50,7 @@ object ArdaBridgeConfigStore {
 
         val config = load(storage)
         writeRuntimeToml(storage, config)
+        ArdaVideoConfigStore.ensureRuntimeConfig(storage)
         return config
     }
 
@@ -75,6 +77,7 @@ object ArdaBridgeConfigStore {
                 keyKeepBluetoothProfilesConnected,
                 true,
             ),
+            forcedVideoResolution = ArdaVideoConfigStore.load(storage).forcedResolution,
         )
     }
 
@@ -97,6 +100,7 @@ object ArdaBridgeConfigStore {
                 )
                 .commit(),
         ) { "Unable to persist connectivity bridge configuration" }
+        ArdaVideoConfigStore.saveForcedResolution(storage, config.forcedVideoResolution)
         writeRuntimeToml(storage, config)
     }
 
@@ -122,6 +126,7 @@ object ArdaBridgeConfigStore {
         require(config.token.toByteArray(Charsets.UTF_8).size <= maxBridgeTokenBytes) {
             "Bridge token exceeds $maxBridgeTokenBytes bytes"
         }
+        ArdaVideoConfigStore.normalizeForcedResolution(config.forcedVideoResolution)
     }
 
     private fun writeRuntimeToml(context: Context, config: ArdaBridgeConfig) {

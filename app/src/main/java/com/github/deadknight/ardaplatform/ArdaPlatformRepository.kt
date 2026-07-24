@@ -10,6 +10,8 @@ import android.database.Cursor
 
 data class ArdaPlatformSnapshot(
     val config: ArdaBridgeConfig,
+    val videoState: ArdaVideoConfigState,
+    val videoRuntimeConfigPath: String,
     val runtimeConfigPath: String,
     val serverRunning: Boolean,
     val hotspotReady: Boolean,
@@ -140,6 +142,10 @@ object ArdaPlatformRepository {
                 ArdaPlatformContract.columnKeepBluetoothProfilesConnected,
                 config.keepBluetoothProfilesConnected,
             )
+            put(
+                ArdaPlatformContract.columnForcedVideoResolution,
+                config.forcedVideoResolution,
+            )
         }
         val updated = runCatching {
             context.contentResolver.update(
@@ -165,7 +171,16 @@ object ArdaPlatformRepository {
             keepBluetoothProfilesConnected = boolean(
                 ArdaPlatformContract.columnKeepBluetoothProfilesConnected,
             ),
+            forcedVideoResolution = string(
+                ArdaPlatformContract.columnForcedVideoResolution,
+            ),
         ),
+        videoState = ArdaVideoConfigStore.loadFromSnapshot(
+            forcedResolution = string(ArdaPlatformContract.columnForcedVideoResolution),
+            rawSdrPayload = nullableString(ArdaPlatformContract.columnVideoSdrPayload),
+            updatedAtMillis = long(ArdaPlatformContract.columnVideoSdrUpdatedAtMillis),
+        ),
+        videoRuntimeConfigPath = string(ArdaPlatformContract.columnVideoRuntimeConfigPath),
         runtimeConfigPath = string(ArdaPlatformContract.columnRuntimeConfigPath),
         serverRunning = boolean(ArdaPlatformContract.columnServerRunning),
         hotspotReady = boolean(ArdaPlatformContract.columnHotspotReady),
@@ -184,6 +199,8 @@ object ArdaPlatformRepository {
         val config = ArdaBridgeConfigStore.load(context)
         return ArdaPlatformSnapshot(
             config = config,
+            videoState = ArdaVideoConfigStore.load(context),
+            videoRuntimeConfigPath = ArdaVideoConfigStore.runtimeTomlFile(context).path,
             runtimeConfigPath = ArdaBridgeConfigStore.runtimeTomlFile(context).path,
             serverRunning = ArdaPlatformState.serverRunning.value,
             hotspotReady = ArdaPlatformState.hotspotReady.value,
@@ -208,5 +225,6 @@ object ArdaPlatformRepository {
     private fun Cursor.nullableString(name: String): String? =
         index(name).let { column -> if (isNull(column)) null else getString(column) }
     private fun Cursor.int(name: String): Int = getInt(index(name))
+    private fun Cursor.long(name: String): Long = getLong(index(name))
     private fun Cursor.boolean(name: String): Boolean = getInt(index(name)) != 0
 }

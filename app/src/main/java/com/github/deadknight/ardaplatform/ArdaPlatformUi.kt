@@ -28,6 +28,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -592,6 +594,9 @@ private fun ConfigScreen(
     var keepProfiles by rememberSaveable {
         mutableStateOf(snapshot.config.keepBluetoothProfilesConnected)
     }
+    var forcedVideoResolution by rememberSaveable {
+        mutableStateOf(snapshot.config.forcedVideoResolution)
+    }
     var showToken by rememberSaveable { mutableStateOf(false) }
     var bottomHvacVisible by remember {
         mutableStateOf(ArdaPlatformRepository.isBottomHvacVisible(context))
@@ -604,6 +609,7 @@ private fun ConfigScreen(
         token = config.token
         keepRfcomm = config.keepBootstrapRfcommOpen
         keepProfiles = config.keepBluetoothProfilesConnected
+        forcedVideoResolution = config.forcedVideoResolution
         persisted = config
     }
 
@@ -617,6 +623,7 @@ private fun ConfigScreen(
             token = token,
             keepBootstrapRfcommOpen = keepRfcomm,
             keepBluetoothProfilesConnected = keepProfiles,
+            forcedVideoResolution = forcedVideoResolution,
         )
     } else {
         null
@@ -770,6 +777,63 @@ private fun ConfigScreen(
                     shape = RoundedCornerShape(22.dp),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.video_configuration_title),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = stringResource(R.string.video_configuration_description),
+                            color = textSecondary,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        VideoResolutionSelector(
+                            forcedResolution = forcedVideoResolution,
+                            observed = snapshot.videoState,
+                            onSelected = { forcedVideoResolution = it },
+                        )
+                        Text(
+                            text = snapshot.videoState.selectedResolution?.let { resolution ->
+                                stringResource(
+                                    R.string.video_last_selected_format,
+                                    resolution,
+                                    snapshot.videoState.selectedFps ?: 0,
+                                    snapshot.videoState.selectionPolicy ?: "unknown",
+                                )
+                            } ?: stringResource(R.string.video_waiting_for_sdr),
+                            color = textSecondary,
+                            fontFamily = FontFamily.Monospace,
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        if (snapshot.videoState.advertisedConfigs.isNotEmpty()) {
+                            Text(
+                                text = snapshot.videoState.advertisedConfigs.joinToString(
+                                    separator = " · ",
+                                ) { it.displayLabel },
+                                color = textSecondary,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Text(
+                            text = snapshot.videoRuntimeConfigPath,
+                            color = textSecondary,
+                            fontFamily = FontFamily.Monospace,
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = surface),
+                    shape = RoundedCornerShape(22.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     Column(Modifier.padding(24.dp)) {
                         Text(
                             text = stringResource(R.string.system_interface_title),
@@ -876,6 +940,74 @@ private fun ConfigScreen(
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 92.dp),
             )
+        }
+    }
+}
+
+
+@Composable
+private fun VideoResolutionSelector(
+    forcedResolution: String,
+    observed: ArdaVideoConfigState,
+    onSelected: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val fallback = listOf("1280x720", "800x480", "1920x1080")
+    val options = (observed.advertisedResolutions + fallback + forcedResolution)
+        .filter(String::isNotBlank)
+        .distinct()
+        .sortedByDescending { value ->
+            value.split('x').let { parts ->
+                (parts.getOrNull(0)?.toLongOrNull() ?: 0L) *
+                    (parts.getOrNull(1)?.toLongOrNull() ?: 0L)
+            }
+        }
+    val label = if (forcedResolution.isBlank()) {
+        stringResource(R.string.video_force_auto)
+    } else {
+        forcedResolution
+    }
+
+    Box {
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp),
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.Start,
+            ) {
+                Text(
+                    text = stringResource(R.string.video_force_label),
+                    color = textSecondary,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Text(text = label, fontWeight = FontWeight.Bold)
+            }
+            Text("▾")
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.video_force_auto)) },
+                onClick = {
+                    onSelected("")
+                    expanded = false
+                },
+            )
+            options.forEach { resolution ->
+                DropdownMenuItem(
+                    text = { Text(resolution) },
+                    onClick = {
+                        onSelected(resolution)
+                        expanded = false
+                    },
+                )
+            }
         }
     }
 }

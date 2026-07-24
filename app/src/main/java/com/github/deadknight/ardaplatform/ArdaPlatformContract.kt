@@ -13,6 +13,10 @@ object ArdaPlatformContract {
     const val columnKeepBootstrapRfcommOpen = "keep_bootstrap_rfcomm_open"
     const val columnKeepBluetoothProfilesConnected =
         "keep_bluetooth_profiles_connected"
+    const val columnForcedVideoResolution = "forced_video_resolution"
+    const val columnVideoRuntimeConfigPath = "video_runtime_config_path"
+    const val columnVideoSdrPayload = "video_sdr_payload"
+    const val columnVideoSdrUpdatedAtMillis = "video_sdr_updated_at_millis"
     const val columnRuntimeConfigPath = "runtime_config_path"
     const val columnServerRunning = "server_running"
     const val columnHotspotReady = "hotspot_ready"

@@ -79,6 +79,19 @@
             android:foregroundServiceType="connectedDevice"
             android:singleUser="true" />
 
+
+        <receiver
+            android:name=".ArdaVideoConfigReceiver"
+            android:directBootAware="true"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.DUMP"
+            android:singleUser="true">
+            <intent-filter>
+                <action android:name="com.github.deadknight.ardaplatform.action.REPORT_VIDEO_SDR" />
+            </intent-filter>
+        </receiver>
+
         <receiver
             android:name=".ArdaPlatformBootReceiver"
             android:directBootAware="true"

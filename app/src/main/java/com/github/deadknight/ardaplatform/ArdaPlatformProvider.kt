@@ -38,6 +38,7 @@ class ArdaPlatformProvider : ContentProvider() {
         require(matcher.match(uri) == matchSnapshot) { "Unsupported URI: $uri" }
         val coreContext = requireNotNull(context)
         val config = ArdaBridgeConfigStore.load(coreContext)
+        val videoState = ArdaVideoConfigStore.load(coreContext)
         val columns = snapshotColumns
         return MatrixCursor(columns, 1).apply {
             addRow(
@@ -47,6 +48,10 @@ class ArdaPlatformProvider : ContentProvider() {
                     config.token,
                     config.keepBootstrapRfcommOpen.asInt(),
                     config.keepBluetoothProfilesConnected.asInt(),
+                    config.forcedVideoResolution,
+                    ArdaVideoConfigStore.runtimeTomlFile(coreContext).path,
+                    videoState.rawSdrPayload,
+                    videoState.updatedAtMillis,
                     ArdaBridgeConfigStore.runtimeTomlFile(coreContext).path,
                     ArdaPlatformState.serverRunning.value.asInt(),
                     ArdaPlatformState.hotspotReady.value.asInt(),
@@ -89,6 +94,9 @@ class ArdaPlatformProvider : ContentProvider() {
                 ArdaPlatformContract.columnKeepBluetoothProfilesConnected,
                 current.keepBluetoothProfilesConnected,
             ),
+            forcedVideoResolution = requested.getAsString(
+                ArdaPlatformContract.columnForcedVideoResolution,
+            ) ?: current.forcedVideoResolution,
         )
         ArdaBridgeConfigStore.saveAndReload(coreContext, updated)
         coreContext.contentResolver.notifyChange(ArdaPlatformContract.snapshotUri, null)
@@ -419,6 +427,10 @@ class ArdaPlatformProvider : ContentProvider() {
             ArdaPlatformContract.columnToken,
             ArdaPlatformContract.columnKeepBootstrapRfcommOpen,
             ArdaPlatformContract.columnKeepBluetoothProfilesConnected,
+            ArdaPlatformContract.columnForcedVideoResolution,
+            ArdaPlatformContract.columnVideoRuntimeConfigPath,
+            ArdaPlatformContract.columnVideoSdrPayload,
+            ArdaPlatformContract.columnVideoSdrUpdatedAtMillis,
             ArdaPlatformContract.columnRuntimeConfigPath,
             ArdaPlatformContract.columnServerRunning,
             ArdaPlatformContract.columnHotspotReady,
