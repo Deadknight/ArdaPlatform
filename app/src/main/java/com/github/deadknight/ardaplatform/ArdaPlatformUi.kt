@@ -33,6 +33,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -70,6 +71,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 private val background = Color(0xFF0B1016)
 private val surface = Color(0xFF121923)
@@ -601,6 +603,24 @@ private fun ConfigScreen(
     var bottomHvacVisible by remember {
         mutableStateOf(ArdaPlatformRepository.isBottomHvacVisible(context))
     }
+    val initialLauncherMapOnRight = remember {
+        ArdaPlatformRepository.isLauncherMapOnRight(context)
+    }
+    val initialLauncherMapWidthPercent = remember {
+        ArdaPlatformRepository.getLauncherMapWidthPercent(context)
+    }
+    var launcherMapOnRight by rememberSaveable {
+        mutableStateOf(initialLauncherMapOnRight)
+    }
+    var launcherMapWidthPercent by rememberSaveable {
+        mutableStateOf(initialLauncherMapWidthPercent)
+    }
+    var persistedLauncherMapOnRight by remember {
+        mutableStateOf(initialLauncherMapOnRight)
+    }
+    var persistedLauncherMapWidthPercent by remember {
+        mutableStateOf(initialLauncherMapWidthPercent)
+    }
     var persisted by remember { mutableStateOf(snapshot.config) }
 
     fun load(config: ArdaBridgeConfig) {
@@ -610,6 +630,10 @@ private fun ConfigScreen(
         keepRfcomm = config.keepBootstrapRfcommOpen
         keepProfiles = config.keepBluetoothProfilesConnected
         forcedVideoResolution = config.forcedVideoResolution
+        launcherMapOnRight = ArdaPlatformRepository.isLauncherMapOnRight(context)
+        launcherMapWidthPercent = ArdaPlatformRepository.getLauncherMapWidthPercent(context)
+        persistedLauncherMapOnRight = launcherMapOnRight
+        persistedLauncherMapWidthPercent = launcherMapWidthPercent
         persisted = config
     }
 
@@ -628,7 +652,11 @@ private fun ConfigScreen(
     } else {
         null
     }
-    val dirty = draft != null && draft != persisted
+    val bridgeConfigDirty = draft != null && draft != persisted
+    val launcherLayoutDirty =
+        launcherMapOnRight != persistedLauncherMapOnRight ||
+            launcherMapWidthPercent != persistedLauncherMapWidthPercent
+    val dirty = draft != null && (bridgeConfigDirty || launcherLayoutDirty)
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val wide = maxWidth >= 900.dp
@@ -864,6 +892,91 @@ private fun ConfigScreen(
                                 }
                             },
                         )
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 18.dp),
+                            color = divider,
+                        )
+
+                        Text(
+                            text = stringResource(R.string.launcher_layout_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = stringResource(R.string.launcher_layout_description),
+                            color = textSecondary,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(Modifier.height(14.dp))
+
+                        Text(
+                            text = stringResource(R.string.launcher_map_position_label),
+                            color = textSecondary,
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            if (launcherMapOnRight) {
+                                OutlinedButton(
+                                    onClick = {
+                                        launcherMapOnRight = false
+                                    },
+                                ) {
+                                    Text(stringResource(R.string.launcher_map_position_left))
+                                }
+                                Button(
+                                    onClick = {},
+                                    enabled = false,
+                                ) {
+                                    Text(stringResource(R.string.launcher_map_position_right))
+                                }
+                            } else {
+                                Button(
+                                    onClick = {},
+                                    enabled = false,
+                                ) {
+                                    Text(stringResource(R.string.launcher_map_position_left))
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        launcherMapOnRight = true
+                                    },
+                                ) {
+                                    Text(stringResource(R.string.launcher_map_position_right))
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = stringResource(
+                                R.string.launcher_map_width_label,
+                                launcherMapWidthPercent,
+                            ),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = stringResource(R.string.launcher_map_width_description),
+                            color = textSecondary,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Slider(
+                            value = launcherMapWidthPercent.toFloat(),
+                            onValueChange = { value ->
+                                launcherMapWidthPercent = value.roundToInt()
+                            },
+                            onValueChangeFinished = {},
+                            valueRange =
+                                ArdaPlatformRepository.launcherMapWidthMinPercent.toFloat()..
+                                    ArdaPlatformRepository.launcherMapWidthMaxPercent.toFloat(),
+                            steps = ArdaPlatformRepository.launcherMapWidthMaxPercent -
+                                ArdaPlatformRepository.launcherMapWidthMinPercent - 1,
+                        )
                     }
                 }
 
@@ -905,7 +1018,17 @@ private fun ConfigScreen(
                             val config = draft ?: return@Button
                             runCatching {
                                 ArdaPlatformRepository.saveConfig(context, config)
+                                ArdaPlatformRepository.setLauncherMapOnRight(
+                                    context,
+                                    launcherMapOnRight,
+                                )
+                                ArdaPlatformRepository.setLauncherMapWidthPercent(
+                                    context,
+                                    launcherMapWidthPercent,
+                                )
                                 persisted = config
+                                persistedLauncherMapOnRight = launcherMapOnRight
+                                persistedLauncherMapWidthPercent = launcherMapWidthPercent
                                 onSnapshotChanged(
                                     ArdaPlatformRepository.loadSnapshot(context),
                                 )

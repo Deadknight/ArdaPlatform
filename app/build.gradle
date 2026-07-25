@@ -10,8 +10,8 @@ android {
         applicationId "com.github.deadknight.ardaplatform"
         minSdk 29
         targetSdk 36
-        versionCode 11
-        versionName "0.6.0-video-config"
+        versionCode 13
+        versionName "0.7.1-launcher-layout-apply"
     }
     buildTypes {
         debug {

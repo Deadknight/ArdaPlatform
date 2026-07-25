@@ -68,6 +68,13 @@
     <string name="system_interface_title">System interface</string>
     <string name="bottom_hvac_visibility_title">Show bottom HVAC controls</string>
     <string name="bottom_hvac_visibility_description">Shows the driver and passenger temperature controls in the bottom system bar. The navigation bar itself remains visible.</string>
+    <string name="launcher_layout_title">Home screen layout</string>
+    <string name="launcher_layout_description">Controls the embedded map panel on the AAOS home screen. Changes are applied immediately and survive reboot.</string>
+    <string name="launcher_map_position_label">Map position</string>
+    <string name="launcher_map_position_left">Left</string>
+    <string name="launcher_map_position_right">Right</string>
+    <string name="launcher_map_width_label">Map width · %1$d%%</string>
+    <string name="launcher_map_width_description">Share of the available launcher content width reserved for the map. Home toggles between this split and full-map view.</string>
 
     <string name="action_reload_saved">Reload saved</string>
     <string name="action_save_apply">Save &amp; apply</string>

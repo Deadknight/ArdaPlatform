@@ -30,6 +30,12 @@ data class ArdaPlatformSnapshot(
 object ArdaPlatformRepository {
     private const val perUserRange = 100_000
     private const val bottomHvacVisibleSetting = "arda_bottom_hvac_visible"
+    private const val launcherMapOnRightSetting = "arda_launcher_map_on_right"
+    private const val launcherMapWidthPercentSetting = "arda_launcher_map_width_percent"
+
+    const val launcherMapWidthMinPercent = 45
+    const val launcherMapWidthMaxPercent = 80
+    const val launcherMapWidthDefaultPercent = 67
     fun ensureCoreStarted(context: Context) {
         val called = runCatching {
             context.contentResolver.call(
@@ -126,6 +132,48 @@ object ArdaPlatformRepository {
             ),
         ) {
             "Could not update the bottom HVAC visibility setting."
+        }
+    }
+
+    fun isLauncherMapOnRight(context: Context): Boolean =
+        Settings.Global.getInt(
+            context.contentResolver,
+            launcherMapOnRightSetting,
+            1,
+        ) != 0
+
+    fun setLauncherMapOnRight(context: Context, onRight: Boolean) {
+        check(
+            Settings.Global.putInt(
+                context.contentResolver,
+                launcherMapOnRightSetting,
+                if (onRight) 1 else 0,
+            ),
+        ) {
+            "Could not update the launcher map position."
+        }
+    }
+
+    fun getLauncherMapWidthPercent(context: Context): Int =
+        Settings.Global.getInt(
+            context.contentResolver,
+            launcherMapWidthPercentSetting,
+            launcherMapWidthDefaultPercent,
+        ).coerceIn(launcherMapWidthMinPercent, launcherMapWidthMaxPercent)
+
+    fun setLauncherMapWidthPercent(context: Context, percent: Int) {
+        val safePercent = percent.coerceIn(
+            launcherMapWidthMinPercent,
+            launcherMapWidthMaxPercent,
+        )
+        check(
+            Settings.Global.putInt(
+                context.contentResolver,
+                launcherMapWidthPercentSetting,
+                safePercent,
+            ),
+        ) {
+            "Could not update the launcher map width."
         }
     }
 
