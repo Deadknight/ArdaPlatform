@@ -52,8 +52,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -138,17 +138,13 @@ fun ArdaPlatformApp() {
     }
 
     MaterialTheme(colorScheme = ardaColors) {
-        // The AAOS climate panel overlays the bottom of the app and does not
-        // report an inset. The spacer is deliberately covered by that panel;
-        // the application tabs stay immediately above it.
-        val statusBarPadding = WindowInsets.statusBars.asPaddingValues()
-        val climatePanelClearance = 88.dp
-
+        // Target-SDK edge-to-edge rendering can place the activity behind AAOS
+        // bars. Consume the actual system-provided safe area on every edge.
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(background)
-                .padding(0.dp, statusBarPadding.calculateTopPadding(), 0.dp, climatePanelClearance),
+                .windowInsetsPadding(WindowInsets.safeDrawing),
         ) {
             Box(
                 modifier = Modifier
@@ -603,6 +599,15 @@ private fun ConfigScreen(
     var bottomHvacVisible by remember {
         mutableStateOf(ArdaPlatformRepository.isBottomHvacVisible(context))
     }
+    val initialSystemBarLayoutVertical = remember {
+        ArdaPlatformRepository.isSystemBarLayoutVertical(context)
+    }
+    var systemBarLayoutVertical by rememberSaveable {
+        mutableStateOf(initialSystemBarLayoutVertical)
+    }
+    var persistedSystemBarLayoutVertical by remember {
+        mutableStateOf(initialSystemBarLayoutVertical)
+    }
     val initialLauncherMapOnRight = remember {
         ArdaPlatformRepository.isLauncherMapOnRight(context)
     }
@@ -630,8 +635,13 @@ private fun ConfigScreen(
         keepRfcomm = config.keepBootstrapRfcommOpen
         keepProfiles = config.keepBluetoothProfilesConnected
         forcedVideoResolution = config.forcedVideoResolution
+        bottomHvacVisible =
+            ArdaPlatformRepository.isBottomHvacVisible(context)
+        systemBarLayoutVertical =
+            ArdaPlatformRepository.isSystemBarLayoutVertical(context)
         launcherMapOnRight = ArdaPlatformRepository.isLauncherMapOnRight(context)
         launcherMapWidthPercent = ArdaPlatformRepository.getLauncherMapWidthPercent(context)
+        persistedSystemBarLayoutVertical = systemBarLayoutVertical
         persistedLauncherMapOnRight = launcherMapOnRight
         persistedLauncherMapWidthPercent = launcherMapWidthPercent
         persisted = config
@@ -654,7 +664,8 @@ private fun ConfigScreen(
     }
     val bridgeConfigDirty = draft != null && draft != persisted
     val launcherLayoutDirty =
-        launcherMapOnRight != persistedLauncherMapOnRight ||
+        systemBarLayoutVertical != persistedSystemBarLayoutVertical ||
+            launcherMapOnRight != persistedLauncherMapOnRight ||
             launcherMapWidthPercent != persistedLauncherMapWidthPercent
     val dirty = draft != null && (bridgeConfigDirty || launcherLayoutDirty)
 
@@ -869,12 +880,112 @@ private fun ConfigScreen(
                             fontWeight = FontWeight.SemiBold,
                         )
                         Spacer(Modifier.height(10.dp))
+
+                        Text(
+                            text = stringResource(R.string.system_bar_layout_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = stringResource(R.string.system_bar_layout_description),
+                            color = textSecondary,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(Modifier.height(14.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            if (systemBarLayoutVertical) {
+                                OutlinedButton(
+                                    onClick = {
+                                        systemBarLayoutVertical = false
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 60.dp),
+                                ) {
+                                    Text(
+                                        stringResource(
+                                            R.string.system_bar_layout_horizontal,
+                                        ),
+                                    )
+                                }
+                                Button(
+                                    onClick = {},
+                                    enabled = false,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 60.dp),
+                                ) {
+                                    Text(
+                                        stringResource(
+                                            R.string.system_bar_layout_vertical,
+                                        ),
+                                    )
+                                }
+                            } else {
+                                Button(
+                                    onClick = {},
+                                    enabled = false,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 60.dp),
+                                ) {
+                                    Text(
+                                        stringResource(
+                                            R.string.system_bar_layout_horizontal,
+                                        ),
+                                    )
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        systemBarLayoutVertical = true
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 60.dp),
+                                ) {
+                                    Text(
+                                        stringResource(
+                                            R.string.system_bar_layout_vertical,
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            text = stringResource(
+                                if (systemBarLayoutVertical) {
+                                    R.string.system_bar_layout_vertical_description
+                                } else {
+                                    R.string.system_bar_layout_horizontal_description
+                                },
+                            ),
+                            color = textSecondary,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 18.dp),
+                            color = divider,
+                        )
+
                         SettingSwitch(
                             title = stringResource(R.string.bottom_hvac_visibility_title),
                             description = stringResource(
-                                R.string.bottom_hvac_visibility_description,
+                                if (systemBarLayoutVertical) {
+                                    R.string.bottom_hvac_vertical_disabled_description
+                                } else {
+                                    R.string.bottom_hvac_visibility_description
+                                },
                             ),
-                            checked = bottomHvacVisible,
+                            checked = bottomHvacVisible && !systemBarLayoutVertical,
+                            enabled = !systemBarLayoutVertical,
                             onCheckedChange = { visible ->
                                 runCatching {
                                     ArdaPlatformRepository.setBottomHvacVisible(
@@ -1018,6 +1129,13 @@ private fun ConfigScreen(
                             val config = draft ?: return@Button
                             runCatching {
                                 ArdaPlatformRepository.saveConfig(context, config)
+                                ArdaPlatformRepository.setSystemBarLayoutVertical(
+                                    context,
+                                    systemBarLayoutVertical,
+                                )
+                                if (systemBarLayoutVertical) {
+                                    bottomHvacVisible = false
+                                }
                                 ArdaPlatformRepository.setLauncherMapOnRight(
                                     context,
                                     launcherMapOnRight,
@@ -1027,6 +1145,8 @@ private fun ConfigScreen(
                                     launcherMapWidthPercent,
                                 )
                                 persisted = config
+                                persistedSystemBarLayoutVertical =
+                                    systemBarLayoutVertical
                                 persistedLauncherMapOnRight = launcherMapOnRight
                                 persistedLauncherMapWidthPercent = launcherMapWidthPercent
                                 onSnapshotChanged(
@@ -1181,6 +1301,7 @@ private fun SettingSwitch(
     description: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
 ) {
     Row(
         modifier = Modifier
@@ -1197,11 +1318,15 @@ private fun SettingSwitch(
             Spacer(Modifier.height(5.dp))
             Text(
                 text = description,
-                color = textSecondary,
+                color = if (enabled) textSecondary else divider,
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
         Spacer(Modifier.width(24.dp))
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+        )
     }
 }

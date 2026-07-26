@@ -68,8 +68,15 @@
     <string name="system_interface_title">System interface</string>
     <string name="bottom_hvac_visibility_title">Show bottom HVAC controls</string>
     <string name="bottom_hvac_visibility_description">Shows the driver and passenger temperature controls in the bottom system bar. The navigation bar itself remains visible.</string>
+    <string name="system_bar_layout_title">System bar layout</string>
+    <string name="system_bar_layout_description">Choose one complete layout. Mixed horizontal and vertical edge combinations are disabled.</string>
+    <string name="system_bar_layout_horizontal">Horizontal</string>
+    <string name="system_bar_layout_vertical">Vertical</string>
+    <string name="system_bar_layout_horizontal_description">Uses the top and bottom system bars. The left and right rails are disabled.</string>
+    <string name="system_bar_layout_vertical_description">Uses the left navigation rail and right status rail. The top and bottom system bars are disabled.</string>
+    <string name="bottom_hvac_vertical_disabled_description">Bottom HVAC is unavailable in the vertical layout and is hidden when Save &amp; apply is used.</string>
     <string name="launcher_layout_title">Home screen layout</string>
-    <string name="launcher_layout_description">Controls the embedded map panel on the AAOS home screen. Changes are applied immediately and survive reboot.</string>
+    <string name="launcher_layout_description">Controls the embedded map panel on the AAOS home screen. Changes are saved with Save &amp; apply and survive reboot.</string>
     <string name="launcher_map_position_label">Map position</string>
     <string name="launcher_map_position_left">Left</string>
     <string name="launcher_map_position_right">Right</string>

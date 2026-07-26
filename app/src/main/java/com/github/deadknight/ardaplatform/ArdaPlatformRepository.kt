@@ -32,6 +32,16 @@ object ArdaPlatformRepository {
     private const val bottomHvacVisibleSetting = "arda_bottom_hvac_visible"
     private const val launcherMapOnRightSetting = "arda_launcher_map_on_right"
     private const val launcherMapWidthPercentSetting = "arda_launcher_map_width_percent"
+    private const val leftRailWhenHvacHiddenSetting =
+        "arda_left_rail_when_hvac_hidden"
+    private const val rightStatusRailEnabledSetting =
+        "arda_right_status_rail_enabled"
+    private const val leftRailRuntimeActiveSetting =
+        "arda_left_rail_runtime_active"
+    private const val systemBarLayoutModeSetting =
+        "arda_system_bar_layout_mode"
+    private const val systemBarLayoutHorizontal = 0
+    private const val systemBarLayoutVertical = 1
 
     const val launcherMapWidthMinPercent = 45
     const val launcherMapWidthMaxPercent = 80
@@ -132,6 +142,116 @@ object ArdaPlatformRepository {
             ),
         ) {
             "Could not update the bottom HVAC visibility setting."
+        }
+    }
+
+
+
+    fun isLeftRailRuntimeActive(context: Context): Boolean =
+        Settings.Global.getInt(
+            context.contentResolver,
+            leftRailRuntimeActiveSetting,
+            0,
+        ) != 0
+
+    fun isSystemBarLayoutVertical(context: Context): Boolean {
+        val configuredMode = Settings.Global.getInt(
+            context.contentResolver,
+            systemBarLayoutModeSetting,
+            -1,
+        )
+        return when (configuredMode) {
+            systemBarLayoutVertical -> true
+            systemBarLayoutHorizontal -> false
+            else -> {
+                // Upgrade compatibility: preserve an already-complete vertical
+                // layout, but normalize every mixed legacy combination to
+                // horizontal when the user next saves.
+                isLeftRailWhenHvacHiddenEnabled(context) &&
+                    isRightStatusRailEnabled(context)
+            }
+        }
+    }
+
+    fun setSystemBarLayoutVertical(context: Context, vertical: Boolean) {
+        val resolver = context.contentResolver
+        val modeValue = if (vertical) {
+            systemBarLayoutVertical
+        } else {
+            systemBarLayoutHorizontal
+        }
+        val railValue = if (vertical) 1 else 0
+
+        val writes = buildList {
+            // Vertical mode has no bottom bar, therefore HVAC cannot remain
+            // visible. Write all legacy keys together; SystemUI's observer
+            // debounce applies the final complete mode.
+            if (vertical) {
+                add(Settings.Global.putInt(resolver, bottomHvacVisibleSetting, 0))
+            }
+            add(
+                Settings.Global.putInt(
+                    resolver,
+                    leftRailWhenHvacHiddenSetting,
+                    railValue,
+                ),
+            )
+            add(
+                Settings.Global.putInt(
+                    resolver,
+                    rightStatusRailEnabledSetting,
+                    railValue,
+                ),
+            )
+            add(
+                Settings.Global.putInt(
+                    resolver,
+                    systemBarLayoutModeSetting,
+                    modeValue,
+                ),
+            )
+        }
+
+        check(writes.all { it }) {
+            "Could not update the system bar layout."
+        }
+    }
+
+    fun isLeftRailWhenHvacHiddenEnabled(context: Context): Boolean =
+        Settings.Global.getInt(
+            context.contentResolver,
+            leftRailWhenHvacHiddenSetting,
+            0,
+        ) != 0
+
+    fun setLeftRailWhenHvacHiddenEnabled(context: Context, enabled: Boolean) {
+        check(
+            Settings.Global.putInt(
+                context.contentResolver,
+                leftRailWhenHvacHiddenSetting,
+                if (enabled) 1 else 0,
+            ),
+        ) {
+            "Could not update the HVAC-hidden left rail setting."
+        }
+    }
+
+    fun isRightStatusRailEnabled(context: Context): Boolean =
+        Settings.Global.getInt(
+            context.contentResolver,
+            rightStatusRailEnabledSetting,
+            0,
+        ) != 0
+
+    fun setRightStatusRailEnabled(context: Context, enabled: Boolean) {
+        check(
+            Settings.Global.putInt(
+                context.contentResolver,
+                rightStatusRailEnabledSetting,
+                if (enabled) 1 else 0,
+            ),
+        ) {
+            "Could not update the right status rail setting."
         }
     }
 
