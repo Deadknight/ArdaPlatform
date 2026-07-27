@@ -40,12 +40,19 @@ object ArdaPlatformRepository {
         "arda_left_rail_runtime_active"
     private const val systemBarLayoutModeSetting =
         "arda_system_bar_layout_mode"
+    private const val aapDensityScaleTenthsSetting =
+        "arda_aap_density_scale_tenths"
     private const val systemBarLayoutHorizontal = 0
     private const val systemBarLayoutVertical = 1
 
     const val launcherMapWidthMinPercent = 45
     const val launcherMapWidthMaxPercent = 80
     const val launcherMapWidthDefaultPercent = 67
+
+    const val aapDensityScaleMinTenths = 1
+    const val aapDensityScaleMaxTenths = 20
+    const val aapDensityScaleDefaultTenths = 10
+    const val androidMinimumWmDensity = 72
     fun ensureCoreStarted(context: Context) {
         val called = runCatching {
             context.contentResolver.call(
@@ -294,6 +301,29 @@ object ArdaPlatformRepository {
             ),
         ) {
             "Could not update the launcher map width."
+        }
+    }
+
+    fun getAapDensityScaleTenths(context: Context): Int =
+        Settings.Global.getInt(
+            context.contentResolver,
+            aapDensityScaleTenthsSetting,
+            aapDensityScaleDefaultTenths,
+        ).coerceIn(aapDensityScaleMinTenths, aapDensityScaleMaxTenths)
+
+    fun setAapDensityScaleTenths(context: Context, tenths: Int) {
+        val safeTenths = tenths.coerceIn(
+            aapDensityScaleMinTenths,
+            aapDensityScaleMaxTenths,
+        )
+        check(
+            Settings.Global.putInt(
+                context.contentResolver,
+                aapDensityScaleTenthsSetting,
+                safeTenths,
+            ),
+        ) {
+            "Could not update the Android Auto density scale."
         }
     }
 

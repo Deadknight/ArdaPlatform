@@ -10,8 +10,8 @@ android {
         applicationId "com.github.deadknight.ardaplatform"
         minSdk 29
         targetSdk 36
-        versionCode 18
-        versionName "0.7.7-system-bar-orientation"
+        versionCode 19
+        versionName "0.7.8-density-scale"
     }
     buildTypes {
         debug {

@@ -144,6 +144,11 @@
     <string name="video_configuration_description">Force a head-unit video resolution for the next AAP session. Auto selects the highest locally compatible quality, currently up to 1280×720.</string>
     <string name="video_force_label">Forced video configuration</string>
     <string name="video_force_auto">Auto · best compatible</string>
+    <string name="video_density_scale_label">Density scale · %1$.1f×</string>
+    <string name="video_density_scale_description">Multiplies the selected SDR density before WindowManager applies it. Saved values take effect on the next Android Auto session or reboot.</string>
+    <string name="video_density_effective_format">Current SDR base: %1$d dpi → effective: %2$d dpi</string>
+    <string name="video_density_effective_waiting">Effective density will be shown after an SDR video configuration is observed.</string>
+    <string name="video_density_minimum_clamp">Android requires at least %1$d dpi; lower results are clamped.</string>
     <string name="video_waiting_for_sdr">Waiting for the first Service Discovery Response.</string>
     <string name="video_last_selected_format">Last selected: %1$s @ %2$d fps · policy %3$s</string>
 

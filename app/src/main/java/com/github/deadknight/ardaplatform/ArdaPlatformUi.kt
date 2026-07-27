@@ -614,17 +614,26 @@ private fun ConfigScreen(
     val initialLauncherMapWidthPercent = remember {
         ArdaPlatformRepository.getLauncherMapWidthPercent(context)
     }
+    val initialAapDensityScaleTenths = remember {
+        ArdaPlatformRepository.getAapDensityScaleTenths(context)
+    }
     var launcherMapOnRight by rememberSaveable {
         mutableStateOf(initialLauncherMapOnRight)
     }
     var launcherMapWidthPercent by rememberSaveable {
         mutableStateOf(initialLauncherMapWidthPercent)
     }
+    var aapDensityScaleTenths by rememberSaveable {
+        mutableStateOf(initialAapDensityScaleTenths)
+    }
     var persistedLauncherMapOnRight by remember {
         mutableStateOf(initialLauncherMapOnRight)
     }
     var persistedLauncherMapWidthPercent by remember {
         mutableStateOf(initialLauncherMapWidthPercent)
+    }
+    var persistedAapDensityScaleTenths by remember {
+        mutableStateOf(initialAapDensityScaleTenths)
     }
     var persisted by remember { mutableStateOf(snapshot.config) }
 
@@ -641,9 +650,12 @@ private fun ConfigScreen(
             ArdaPlatformRepository.isSystemBarLayoutVertical(context)
         launcherMapOnRight = ArdaPlatformRepository.isLauncherMapOnRight(context)
         launcherMapWidthPercent = ArdaPlatformRepository.getLauncherMapWidthPercent(context)
+        aapDensityScaleTenths =
+            ArdaPlatformRepository.getAapDensityScaleTenths(context)
         persistedSystemBarLayoutVertical = systemBarLayoutVertical
         persistedLauncherMapOnRight = launcherMapOnRight
         persistedLauncherMapWidthPercent = launcherMapWidthPercent
+        persistedAapDensityScaleTenths = aapDensityScaleTenths
         persisted = config
     }
 
@@ -667,7 +679,25 @@ private fun ConfigScreen(
         systemBarLayoutVertical != persistedSystemBarLayoutVertical ||
             launcherMapOnRight != persistedLauncherMapOnRight ||
             launcherMapWidthPercent != persistedLauncherMapWidthPercent
-    val dirty = draft != null && (bridgeConfigDirty || launcherLayoutDirty)
+    val densityScaleDirty =
+        aapDensityScaleTenths != persistedAapDensityScaleTenths
+    val dirty =
+        draft != null && (bridgeConfigDirty || launcherLayoutDirty || densityScaleDirty)
+
+    val selectedObservedVideoConfig = snapshot.videoState.advertisedConfigs
+        .firstOrNull { it.configIndex == snapshot.videoState.selectedConfigIndex }
+        ?: snapshot.videoState.advertisedConfigs
+            .firstOrNull { it.size == snapshot.videoState.selectedResolution }
+    val densityBase = selectedObservedVideoConfig?.let { observed ->
+        observed.realDensity.takeIf { it > 0 }
+            ?: observed.density.takeIf { it > 0 }
+    }
+    val rawEffectiveDensity = densityBase?.let { base ->
+        ((base * aapDensityScaleTenths) + 5) / 10
+    }
+    val effectiveDensity = rawEffectiveDensity?.coerceAtLeast(
+        ArdaPlatformRepository.androidMinimumWmDensity,
+    )
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val wide = maxWidth >= 900.dp
@@ -835,6 +865,71 @@ private fun ConfigScreen(
                             observed = snapshot.videoState,
                             onSelected = { forcedVideoResolution = it },
                         )
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            color = divider,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.video_density_scale_label,
+                                aapDensityScaleTenths / 10f,
+                            ),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = stringResource(R.string.video_density_scale_description),
+                            color = textSecondary,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Slider(
+                            value = aapDensityScaleTenths.toFloat(),
+                            onValueChange = { value ->
+                                aapDensityScaleTenths = value.roundToInt()
+                            },
+                            valueRange =
+                                ArdaPlatformRepository.aapDensityScaleMinTenths.toFloat()..
+                                    ArdaPlatformRepository.aapDensityScaleMaxTenths.toFloat(),
+                            steps = ArdaPlatformRepository.aapDensityScaleMaxTenths -
+                                ArdaPlatformRepository.aapDensityScaleMinTenths - 1,
+                        )
+                        Text(
+                            text = if (
+                                densityBase != null &&
+                                effectiveDensity != null &&
+                                rawEffectiveDensity != null
+                            ) {
+                                stringResource(
+                                    R.string.video_density_effective_format,
+                                    densityBase,
+                                    effectiveDensity,
+                                )
+                            } else {
+                                stringResource(
+                                    R.string.video_density_effective_waiting,
+                                )
+                            },
+                            color = textSecondary,
+                            fontFamily = FontFamily.Monospace,
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        if (
+                            rawEffectiveDensity != null &&
+                            rawEffectiveDensity <
+                                ArdaPlatformRepository.androidMinimumWmDensity
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    R.string.video_density_minimum_clamp,
+                                    ArdaPlatformRepository.androidMinimumWmDensity,
+                                ),
+                                color = warning,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+
                         Text(
                             text = snapshot.videoState.selectedResolution?.let { resolution ->
                                 stringResource(
@@ -1128,6 +1223,10 @@ private fun ConfigScreen(
                         onClick = {
                             val config = draft ?: return@Button
                             runCatching {
+                                ArdaPlatformRepository.setAapDensityScaleTenths(
+                                    context,
+                                    aapDensityScaleTenths,
+                                )
                                 ArdaPlatformRepository.saveConfig(context, config)
                                 ArdaPlatformRepository.setSystemBarLayoutVertical(
                                     context,
@@ -1149,6 +1248,8 @@ private fun ConfigScreen(
                                     systemBarLayoutVertical
                                 persistedLauncherMapOnRight = launcherMapOnRight
                                 persistedLauncherMapWidthPercent = launcherMapWidthPercent
+                                persistedAapDensityScaleTenths =
+                                    aapDensityScaleTenths
                                 onSnapshotChanged(
                                     ArdaPlatformRepository.loadSnapshot(context),
                                 )
