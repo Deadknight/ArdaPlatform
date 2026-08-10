@@ -66,6 +66,13 @@
         <!-- Access is default-deny in MapsEnergyProvider: CAR_ENERGY for Maps,
              MANAGE_ARDA_PLATFORM/root/shell/same-app for administration. -->
         <provider
+            android:name=".ArdaLauncherBackgroundProvider"
+            android:authorities="${applicationId}.launcher-background"
+            android:directBootAware="true"
+            android:exported="true"
+            android:grantUriPermissions="false" />
+
+        <provider
             android:name=".MapsEnergyProvider"
             android:authorities="google_maps_energy"
             android:directBootAware="true"

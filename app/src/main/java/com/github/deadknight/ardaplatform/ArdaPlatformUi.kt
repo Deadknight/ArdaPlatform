@@ -1,6 +1,9 @@
 package com.github.deadknight.ardaplatform
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,10 +24,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -57,6 +62,8 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -68,6 +75,9 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.graphics.BitmapFactory
+import android.graphics.Color as AndroidColor
+import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -573,6 +583,381 @@ private fun RecentActivity(snapshot: ArdaPlatformSnapshot) {
 }
 
 @Composable
+private fun ArdaColorPickerField(
+    label: String,
+    value: String,
+    enabled: Boolean,
+    allowDefault: Boolean,
+    isValid: Boolean,
+    onValueChange: (String) -> Unit,
+) {
+    var pickerOpen by remember { mutableStateOf(false) }
+
+    val previewColor = remember(value) {
+        parseComposeColorOrNull(value) ?: Color.Transparent
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.weight(1f),
+                enabled = enabled,
+                label = { Text(label) },
+                supportingText = {
+                    Text(
+                        stringResource(
+                            if (isValid) {
+                                if (allowDefault) {
+                                    R.string.system_bar_color_hint
+                                } else {
+                                    R.string.visual_color_format_hint
+                                }
+                            } else {
+                                R.string.visual_color_invalid
+                            },
+                        ),
+                    )
+                },
+                isError = !isValid,
+                singleLine = true,
+            )
+
+            OutlinedButton(
+                onClick = { pickerOpen = true },
+                enabled = enabled,
+                modifier = Modifier
+                    .heightIn(min = 56.dp)
+                    .widthIn(min = 94.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(
+                            if (value.equals(
+                                    ArdaVisualTheme.noOverride,
+                                    ignoreCase = true,
+                                )
+                            ) {
+                                surfaceRaised
+                            } else {
+                                previewColor
+                            },
+                        ),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.action_pick_color))
+            }
+        }
+    }
+
+    if (pickerOpen) {
+        ArdaColorPickerDialog(
+            title = label,
+            initialValue = value,
+            allowDefault = allowDefault,
+            onDismiss = { pickerOpen = false },
+            onSelected = {
+                onValueChange(it)
+                pickerOpen = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun ArdaColorPickerDialog(
+    title: String,
+    initialValue: String,
+    allowDefault: Boolean,
+    onDismiss: () -> Unit,
+    onSelected: (String) -> Unit,
+) {
+    val fallback = AndroidColor.rgb(11, 16, 22)
+    val initialColor = remember(initialValue) {
+        runCatching {
+            if (initialValue.equals(ArdaVisualTheme.noOverride, ignoreCase = true)) {
+                fallback
+            } else {
+                AndroidColor.parseColor(ArdaVisualTheme.normalizeColor(initialValue))
+            }
+        }.getOrDefault(fallback)
+    }
+
+    val initialHsv = remember(initialColor) {
+        FloatArray(3).also { AndroidColor.colorToHSV(initialColor, it) }
+    }
+
+    var hue by remember(initialColor) { mutableStateOf(initialHsv[0]) }
+    var saturation by remember(initialColor) { mutableStateOf(initialHsv[1]) }
+    var value by remember(initialColor) { mutableStateOf(initialHsv[2]) }
+
+    val selectedArgb = AndroidColor.HSVToColor(
+        floatArrayOf(hue, saturation, value),
+    )
+    val selectedHex = String.format(
+        Locale.US,
+        "#FF%02X%02X%02X",
+        AndroidColor.red(selectedArgb),
+        AndroidColor.green(selectedArgb),
+        AndroidColor.blue(selectedArgb),
+    )
+    val selectedComposeColor = Color(selectedArgb)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(72.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(selectedComposeColor),
+                )
+
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = selectedHex,
+                    fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    text = stringResource(R.string.color_picker_hue, hue.roundToInt()),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Slider(
+                    value = hue,
+                    onValueChange = { hue = it },
+                    valueRange = 0f..360f,
+                )
+
+                Text(
+                    text = stringResource(
+                        R.string.color_picker_saturation,
+                        (saturation * 100f).roundToInt(),
+                    ),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Slider(
+                    value = saturation,
+                    onValueChange = { saturation = it },
+                    valueRange = 0f..1f,
+                )
+
+                Text(
+                    text = stringResource(
+                        R.string.color_picker_brightness,
+                        (value * 100f).roundToInt(),
+                    ),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Slider(
+                    value = value,
+                    onValueChange = { value = it },
+                    valueRange = 0f..1f,
+                )
+
+                Text(
+                    text = stringResource(R.string.color_picker_presets),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        "#FF000000",
+                        "#FF0B1016",
+                        "#FF182230",
+                        "#FF303840",
+                        "#FFFFFFFF",
+                        "#FF1B365D",
+                    ).forEach { preset ->
+                        val presetColor = parseComposeColorOrNull(preset) ?: Color.Transparent
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(presetColor)
+                                .clickable {
+                                    val parsed = AndroidColor.parseColor(preset)
+                                    val hsv = FloatArray(3)
+                                    AndroidColor.colorToHSV(parsed, hsv)
+                                    hue = hsv[0]
+                                    saturation = hsv[1]
+                                    value = hsv[2]
+                                },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSelected(selectedHex) }) {
+                Text(stringResource(R.string.action_use_color))
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (allowDefault) {
+                    TextButton(
+                        onClick = {
+                            onSelected(ArdaVisualTheme.noOverride)
+                        },
+                    ) {
+                        Text(stringResource(R.string.visual_mode_default))
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun LauncherBackgroundImagePicker(
+    imageAvailable: Boolean,
+    imageRevision: Int,
+    selected: Boolean,
+    onPick: () -> Unit,
+    onUseImage: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    val context = LocalContext.current
+    val file = remember(context) {
+        ArdaVisualThemeStore.launcherBackgroundFile(context)
+    }
+    val image = remember(imageAvailable, imageRevision) {
+        if (imageAvailable && file.isFile) {
+            runCatching {
+                BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
+            }.getOrNull()
+        } else {
+            null
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        if (image != null) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = surfaceRaised),
+            ) {
+                Image(
+                    bitmap = image,
+                    contentDescription = stringResource(
+                        R.string.launcher_background_preview_description,
+                    ),
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedButton(
+                onClick = onPick,
+                modifier = Modifier.heightIn(min = 52.dp),
+            ) {
+                Text(
+                    stringResource(
+                        if (imageAvailable) {
+                            R.string.action_replace_background_image
+                        } else {
+                            R.string.action_select_background_image
+                        },
+                    ),
+                )
+            }
+
+            if (imageAvailable && !selected) {
+                Button(
+                    onClick = onUseImage,
+                    modifier = Modifier.heightIn(min = 52.dp),
+                ) {
+                    Text(stringResource(R.string.action_use_image))
+                }
+            }
+
+            if (imageAvailable) {
+                TextButton(onClick = onRemove) {
+                    Text(stringResource(R.string.action_remove_image))
+                }
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = stringResource(
+                when {
+                    selected -> R.string.launcher_background_image_selected
+                    imageAvailable -> R.string.launcher_background_image_ready
+                    else -> R.string.launcher_background_image_none
+                },
+            ),
+            color = textSecondary,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
+private fun parseComposeColorOrNull(value: String): Color? {
+    if (value.equals(ArdaVisualTheme.noOverride, ignoreCase = true)) {
+        return null
+    }
+    return runCatching {
+        Color(AndroidColor.parseColor(ArdaVisualTheme.normalizeColor(value)))
+    }.getOrNull()
+}
+
+@Composable
+private fun VisualModeButton(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    if (selected) {
+        Button(
+            onClick = {},
+            enabled = false,
+            modifier = Modifier.heightIn(min = 52.dp),
+        ) {
+            Text(text)
+        }
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            modifier = Modifier.heightIn(min = 52.dp),
+        ) {
+            Text(text)
+        }
+    }
+}
+
+@Composable
 private fun ConfigScreen(
     snapshot: ArdaPlatformSnapshot,
     onSnapshotChanged: (ArdaPlatformSnapshot) -> Unit,
@@ -617,6 +1002,9 @@ private fun ConfigScreen(
     val initialAapDensityScaleTenths = remember {
         ArdaPlatformRepository.getAapDensityScaleTenths(context)
     }
+    val initialVisualTheme = remember {
+        ArdaPlatformRepository.getVisualTheme(context)
+    }
     var launcherMapOnRight by rememberSaveable {
         mutableStateOf(initialLauncherMapOnRight)
     }
@@ -635,6 +1023,48 @@ private fun ConfigScreen(
     var persistedAapDensityScaleTenths by remember {
         mutableStateOf(initialAapDensityScaleTenths)
     }
+
+    var launcherBackgroundMode by rememberSaveable {
+        mutableStateOf(initialVisualTheme.launcherBackgroundMode)
+    }
+    var launcherBackgroundColor by rememberSaveable {
+        mutableStateOf(initialVisualTheme.launcherBackgroundColor)
+    }
+    var navigationBarBackgroundColor by rememberSaveable {
+        mutableStateOf(initialVisualTheme.navigationBarBackgroundColor)
+    }
+    var statusBarBackgroundColor by rememberSaveable {
+        mutableStateOf(initialVisualTheme.statusBarBackgroundColor)
+    }
+    var launcherBackgroundImageAvailable by remember {
+        mutableStateOf(initialVisualTheme.launcherBackgroundImageAvailable)
+    }
+    var launcherBackgroundImageRevision by remember { mutableStateOf(0) }
+    var persistedVisualTheme by remember {
+        mutableStateOf(initialVisualTheme)
+    }
+
+    val launcherBackgroundPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                ArdaVisualThemeStore.importLauncherBackground(context, uri)
+            }.onSuccess {
+                launcherBackgroundImageAvailable = true
+                launcherBackgroundImageRevision += 1
+                launcherBackgroundMode =
+                    ArdaVisualTheme.launcherBackgroundModeImage
+            }.onFailure { error ->
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        error.message ?: saveFailedMessage,
+                    )
+                }
+            }
+        }
+    }
+
     var persisted by remember { mutableStateOf(snapshot.config) }
 
     fun load(config: ArdaBridgeConfig) {
@@ -656,6 +1086,14 @@ private fun ConfigScreen(
         persistedLauncherMapOnRight = launcherMapOnRight
         persistedLauncherMapWidthPercent = launcherMapWidthPercent
         persistedAapDensityScaleTenths = aapDensityScaleTenths
+        val visualTheme = ArdaPlatformRepository.getVisualTheme(context)
+        launcherBackgroundMode = visualTheme.launcherBackgroundMode
+        launcherBackgroundColor = visualTheme.launcherBackgroundColor
+        navigationBarBackgroundColor = visualTheme.navigationBarBackgroundColor
+        statusBarBackgroundColor = visualTheme.statusBarBackgroundColor
+        launcherBackgroundImageAvailable =
+            visualTheme.launcherBackgroundImageAvailable
+        persistedVisualTheme = visualTheme
         persisted = config
     }
 
@@ -681,8 +1119,41 @@ private fun ConfigScreen(
             launcherMapWidthPercent != persistedLauncherMapWidthPercent
     val densityScaleDirty =
         aapDensityScaleTenths != persistedAapDensityScaleTenths
+    val launcherBackgroundColorValid =
+        ArdaVisualTheme.isValidColor(launcherBackgroundColor)
+    val navigationBarColorValid =
+        navigationBarBackgroundColor.equals(
+            ArdaVisualTheme.noOverride,
+            ignoreCase = true,
+        ) || ArdaVisualTheme.isValidColor(navigationBarBackgroundColor)
+    val statusBarColorValid =
+        statusBarBackgroundColor.equals(
+            ArdaVisualTheme.noOverride,
+            ignoreCase = true,
+        ) || ArdaVisualTheme.isValidColor(statusBarBackgroundColor)
+    val visualThemeValid =
+        launcherBackgroundColorValid &&
+            navigationBarColorValid &&
+            statusBarColorValid &&
+            (
+                launcherBackgroundMode !=
+                    ArdaVisualTheme.launcherBackgroundModeImage ||
+                    launcherBackgroundImageAvailable
+                )
+    val visualThemeDirty =
+        launcherBackgroundMode != persistedVisualTheme.launcherBackgroundMode ||
+            ArdaVisualTheme.normalizeColor(launcherBackgroundColor) !=
+                persistedVisualTheme.launcherBackgroundColor ||
+            navigationBarBackgroundColor !=
+                persistedVisualTheme.navigationBarBackgroundColor ||
+            statusBarBackgroundColor !=
+                persistedVisualTheme.statusBarBackgroundColor ||
+            launcherBackgroundImageAvailable !=
+                persistedVisualTheme.launcherBackgroundImageAvailable
     val dirty =
-        draft != null && (bridgeConfigDirty || launcherLayoutDirty || densityScaleDirty)
+        draft != null &&
+            (bridgeConfigDirty || launcherLayoutDirty ||
+                densityScaleDirty || visualThemeDirty)
 
     val selectedObservedVideoConfig = snapshot.videoState.advertisedConfigs
         .firstOrNull { it.configIndex == snapshot.videoState.selectedConfigIndex }
@@ -1105,6 +1576,136 @@ private fun ConfigScreen(
                         )
 
                         Text(
+                            text = stringResource(R.string.visual_theme_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = stringResource(R.string.visual_theme_description),
+                            color = textSecondary,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(Modifier.height(14.dp))
+
+                        Text(
+                            text = stringResource(R.string.launcher_background_title),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = stringResource(R.string.launcher_background_description),
+                            color = textSecondary,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            VisualModeButton(
+                                text = stringResource(R.string.visual_mode_default),
+                                selected = launcherBackgroundMode ==
+                                    ArdaVisualTheme.launcherBackgroundModeDefault,
+                                onClick = {
+                                    launcherBackgroundMode =
+                                        ArdaVisualTheme.launcherBackgroundModeDefault
+                                },
+                            )
+                            VisualModeButton(
+                                text = stringResource(R.string.visual_mode_color),
+                                selected = launcherBackgroundMode ==
+                                    ArdaVisualTheme.launcherBackgroundModeColor,
+                                onClick = {
+                                    launcherBackgroundMode =
+                                        ArdaVisualTheme.launcherBackgroundModeColor
+                                },
+                            )
+                            VisualModeButton(
+                                text = stringResource(R.string.visual_mode_image),
+                                selected = launcherBackgroundMode ==
+                                    ArdaVisualTheme.launcherBackgroundModeImage,
+                                onClick = {
+                                    if (launcherBackgroundImageAvailable) {
+                                        launcherBackgroundMode =
+                                            ArdaVisualTheme.launcherBackgroundModeImage
+                                    } else {
+                                        launcherBackgroundPicker.launch(arrayOf("image/*"))
+                                    }
+                                },
+                            )
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+                        ArdaColorPickerField(
+                            label = stringResource(R.string.launcher_background_color_label),
+                            value = launcherBackgroundColor,
+                            enabled = launcherBackgroundMode ==
+                                ArdaVisualTheme.launcherBackgroundModeColor,
+                            allowDefault = false,
+                            isValid = launcherBackgroundColorValid,
+                            onValueChange = { launcherBackgroundColor = it },
+                        )
+
+                        LauncherBackgroundImagePicker(
+                            imageAvailable = launcherBackgroundImageAvailable,
+                            imageRevision = launcherBackgroundImageRevision,
+                            selected = launcherBackgroundMode ==
+                                ArdaVisualTheme.launcherBackgroundModeImage,
+                            onPick = {
+                                launcherBackgroundPicker.launch(arrayOf("image/*"))
+                            },
+                            onUseImage = {
+                                launcherBackgroundMode =
+                                    ArdaVisualTheme.launcherBackgroundModeImage
+                            },
+                            onRemove = {
+                                ArdaVisualThemeStore.removeLauncherBackground(context)
+                                launcherBackgroundImageAvailable = false
+                                launcherBackgroundImageRevision += 1
+                                if (launcherBackgroundMode ==
+                                    ArdaVisualTheme.launcherBackgroundModeImage
+                                ) {
+                                    launcherBackgroundMode =
+                                        ArdaVisualTheme.launcherBackgroundModeDefault
+                                }
+                            },
+                        )
+
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = stringResource(R.string.system_bar_colors_title),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = stringResource(R.string.system_bar_colors_description),
+                            color = textSecondary,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Spacer(Modifier.height(10.dp))
+
+                        ArdaColorPickerField(
+                            label = stringResource(R.string.navigation_bar_color_label),
+                            value = navigationBarBackgroundColor,
+                            enabled = true,
+                            allowDefault = true,
+                            isValid = navigationBarColorValid,
+                            onValueChange = { navigationBarBackgroundColor = it },
+                        )
+
+                        ArdaColorPickerField(
+                            label = stringResource(R.string.status_bar_color_label),
+                            value = statusBarBackgroundColor,
+                            enabled = true,
+                            allowDefault = true,
+                            isValid = statusBarColorValid,
+                            onValueChange = { statusBarBackgroundColor = it },
+                        )
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 18.dp),
+                            color = divider,
+                        )
+
+                        Text(
                             text = stringResource(R.string.launcher_layout_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
@@ -1243,6 +1844,15 @@ private fun ConfigScreen(
                                     context,
                                     launcherMapWidthPercent,
                                 )
+                                ArdaPlatformRepository.saveVisualTheme(
+                                    context = context,
+                                    launcherBackgroundMode = launcherBackgroundMode,
+                                    launcherBackgroundColor = launcherBackgroundColor,
+                                    navigationBarBackgroundColor =
+                                        navigationBarBackgroundColor,
+                                    statusBarBackgroundColor =
+                                        statusBarBackgroundColor,
+                                )
                                 persisted = config
                                 persistedSystemBarLayoutVertical =
                                     systemBarLayoutVertical
@@ -1250,6 +1860,8 @@ private fun ConfigScreen(
                                 persistedLauncherMapWidthPercent = launcherMapWidthPercent
                                 persistedAapDensityScaleTenths =
                                     aapDensityScaleTenths
+                                persistedVisualTheme =
+                                    ArdaPlatformRepository.getVisualTheme(context)
                                 onSnapshotChanged(
                                     ArdaPlatformRepository.loadSnapshot(context),
                                 )
@@ -1267,7 +1879,7 @@ private fun ConfigScreen(
                                 }
                             }
                         },
-                        enabled = dirty && portValid && tokenValid,
+                        enabled = dirty && portValid && tokenValid && visualThemeValid,
                         modifier = Modifier
                             .heightIn(min = 56.dp)
                             .widthIn(min = 190.dp),

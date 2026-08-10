@@ -53,6 +53,14 @@ object ArdaPlatformRepository {
     const val aapDensityScaleMaxTenths = 20
     const val aapDensityScaleDefaultTenths = 10
     const val androidMinimumWmDensity = 72
+
+    data class VisualThemeConfig(
+        val launcherBackgroundMode: Int,
+        val launcherBackgroundColor: String,
+        val navigationBarBackgroundColor: String,
+        val statusBarBackgroundColor: String,
+        val launcherBackgroundImageAvailable: Boolean,
+    )
     fun ensureCoreStarted(context: Context) {
         val called = runCatching {
             context.contentResolver.call(
@@ -392,6 +400,116 @@ object ArdaPlatformRepository {
         lastEvent = nullableString(ArdaPlatformContract.columnLastEvent),
         lastError = nullableString(ArdaPlatformContract.columnLastError),
     )
+
+    fun getVisualTheme(context: Context): VisualThemeConfig {
+        val resolver = context.contentResolver
+
+        fun readBar(key: String): String {
+            val value = Settings.Global.getString(resolver, key)
+                ?: return ArdaVisualTheme.noOverride
+            if (value.equals(ArdaVisualTheme.noOverride, ignoreCase = true)) {
+                return ArdaVisualTheme.noOverride
+            }
+            return value.takeIf(ArdaVisualTheme::isValidColor)
+                ?.let(ArdaVisualTheme::normalizeColor)
+                ?: ArdaVisualTheme.noOverride
+        }
+
+        return VisualThemeConfig(
+            launcherBackgroundMode = Settings.Global.getInt(
+                resolver,
+                ArdaVisualTheme.launcherBackgroundModeSetting,
+                ArdaVisualTheme.launcherBackgroundModeDefault,
+            ).coerceIn(
+                ArdaVisualTheme.launcherBackgroundModeDefault,
+                ArdaVisualTheme.launcherBackgroundModeImage,
+            ),
+            launcherBackgroundColor = Settings.Global.getString(
+                resolver,
+                ArdaVisualTheme.launcherBackgroundColorSetting,
+            )?.takeIf(ArdaVisualTheme::isValidColor)
+                ?.let(ArdaVisualTheme::normalizeColor)
+                ?: ArdaVisualTheme.defaultLauncherColor,
+            navigationBarBackgroundColor = readBar(
+                ArdaVisualTheme.navigationBarBackgroundColorSetting,
+            ),
+            statusBarBackgroundColor = readBar(
+                ArdaVisualTheme.statusBarBackgroundColorSetting,
+            ),
+            launcherBackgroundImageAvailable =
+                ArdaVisualThemeStore.hasLauncherBackground(context),
+        )
+    }
+
+    fun saveVisualTheme(
+        context: Context,
+        launcherBackgroundMode: Int,
+        launcherBackgroundColor: String,
+        navigationBarBackgroundColor: String,
+        statusBarBackgroundColor: String,
+    ) {
+        val resolver = context.contentResolver
+        val normalizedLauncher =
+            ArdaVisualTheme.normalizeColor(launcherBackgroundColor)
+        check(ArdaVisualTheme.isValidColor(normalizedLauncher)) {
+            "Invalid launcher background color"
+        }
+
+        fun normalizeBar(value: String): String {
+            if (value.equals(ArdaVisualTheme.noOverride, ignoreCase = true)) {
+                return ArdaVisualTheme.noOverride
+            }
+            val normalized = ArdaVisualTheme.normalizeColor(value)
+            check(ArdaVisualTheme.isValidColor(normalized)) {
+                "Invalid system bar color"
+            }
+            return normalized
+        }
+
+        val normalizedNavigation = normalizeBar(navigationBarBackgroundColor)
+        val normalizedStatus = normalizeBar(statusBarBackgroundColor)
+
+        if (launcherBackgroundMode == ArdaVisualTheme.launcherBackgroundModeImage) {
+            check(ArdaVisualThemeStore.hasLauncherBackground(context)) {
+                "Select a launcher background image first"
+            }
+        }
+
+        val writes = listOf(
+            Settings.Global.putInt(
+                resolver,
+                ArdaVisualTheme.launcherBackgroundModeSetting,
+                launcherBackgroundMode.coerceIn(
+                    ArdaVisualTheme.launcherBackgroundModeDefault,
+                    ArdaVisualTheme.launcherBackgroundModeImage,
+                ),
+            ),
+            Settings.Global.putString(
+                resolver,
+                ArdaVisualTheme.launcherBackgroundColorSetting,
+                normalizedLauncher,
+            ),
+            Settings.Global.putString(
+                resolver,
+                ArdaVisualTheme.launcherBackgroundUriSetting,
+                ArdaVisualTheme.launcherBackgroundUri(context).toString(),
+            ),
+            Settings.Global.putString(
+                resolver,
+                ArdaVisualTheme.navigationBarBackgroundColorSetting,
+                normalizedNavigation,
+            ),
+            Settings.Global.putString(
+                resolver,
+                ArdaVisualTheme.statusBarBackgroundColorSetting,
+                normalizedStatus,
+            ),
+        )
+        check(writes.all { it }) { "Could not save ARDA visual theme" }
+
+        // Written last so Launcher/SystemUI consume one coherent snapshot.
+        ArdaVisualThemeStore.bumpRevision(context)
+    }
 
     private fun localSnapshot(context: Context): ArdaPlatformSnapshot {
         val config = ArdaBridgeConfigStore.load(context)

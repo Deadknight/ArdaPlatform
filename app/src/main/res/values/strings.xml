@@ -152,4 +152,36 @@
     <string name="video_waiting_for_sdr">Waiting for the first Service Discovery Response.</string>
     <string name="video_last_selected_format">Last selected: %1$s @ %2$d fps · policy %3$s</string>
 
+    <string name="visual_theme_title">Appearance</string>
+    <string name="visual_theme_description">Customize the launcher canvas independently from the system bars.</string>
+    <string name="launcher_background_title">Launcher background</string>
+    <string name="launcher_background_description">Use the stock background, a solid color, or a selected image. Map and media cards keep their own backgrounds.</string>
+    <string name="visual_mode_default">Default</string>
+    <string name="visual_mode_color">Color</string>
+    <string name="visual_mode_image">Image</string>
+    <string name="launcher_background_color_label">Launcher color</string>
+    <string name="visual_color_format_hint">Use #RRGGBB or #AARRGGBB.</string>
+    <string name="visual_color_invalid">Enter a valid #RRGGBB or #AARRGGBB color.</string>
+    <string name="action_select_background_image">Select image</string>
+    <string name="action_replace_background_image">Replace image</string>
+    <string name="launcher_background_image_ready">Image ready. Select Image and Save &amp; apply to use it.</string>
+    <string name="launcher_background_image_none">No image selected.</string>
+    <string name="system_bar_colors_title">System bar backgrounds</string>
+    <string name="system_bar_colors_description">Navigation and status bars are independent from the launcher canvas. Navigation means left in Vertical and bottom in Horizontal. Status means right in Vertical and top in Horizontal.</string>
+    <string name="navigation_bar_color_label">Navigation bar · left / bottom</string>
+    <string name="status_bar_color_label">Status bar · right / top</string>
+    <string name="system_bar_color_hint">Use “default” to keep the stock bar color, or enter #RRGGBB / #AARRGGBB.</string>
+
+    <string name="action_pick_color">Pick</string>
+    <string name="action_use_color">Use color</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_use_image">Use image</string>
+    <string name="action_remove_image">Remove</string>
+    <string name="launcher_background_image_selected">Image selected. Save &amp; apply to update the launcher.</string>
+    <string name="launcher_background_preview_description">Launcher background preview</string>
+    <string name="color_picker_hue">Hue · %1$d°</string>
+    <string name="color_picker_saturation">Saturation · %1$d%%</string>
+    <string name="color_picker_brightness">Brightness · %1$d%%</string>
+    <string name="color_picker_presets">Quick colors</string>
+
 </resources>
