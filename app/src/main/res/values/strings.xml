@@ -184,4 +184,13 @@
     <string name="color_picker_brightness">Brightness · %1$d%%</string>
     <string name="color_picker_presets">Quick colors</string>
 
+
+    <string name="cpu_performance_title">Performance</string>
+    <string name="cpu_performance_description">Sets the dynamic CPU maximum. Stock remains the default; the ondemand governor still lowers frequency when full performance is not needed.</string>
+    <string name="cpu_boost_label">CPU boost · %1$s MHz · target max %2$d MHz</string>
+    <string name="cpu_performance_runtime">Current %1$d MHz · policy max %2$d MHz · hardware ceiling %3$d MHz · %4$.1f °C</string>
+    <string name="cpu_performance_stock_hint">Default · stock 1500 MHz. No overclock is applied unless you explicitly select a positive boost.</string>
+    <string name="cpu_performance_custom_hint">Custom CPU maximum. Values above 1500 MHz are overclock profiles; Save &amp; apply is required.</string>
+    <string name="cpu_performance_thermal_guard">Automatic protection: at 78 °C the root tuner clamps back to stock; requested boost is allowed again after cooling to 72 °C.</string>
+
 </resources>

@@ -1002,6 +1002,9 @@ private fun ConfigScreen(
     val initialAapDensityScaleTenths = remember {
         ArdaPlatformRepository.getAapDensityScaleTenths(context)
     }
+    val initialCpuBoostOffsetMhz = remember {
+        ArdaCpuPerformance.getRequestedOffsetMhz(context)
+    }
     val initialVisualTheme = remember {
         ArdaPlatformRepository.getVisualTheme(context)
     }
@@ -1014,6 +1017,12 @@ private fun ConfigScreen(
     var aapDensityScaleTenths by rememberSaveable {
         mutableStateOf(initialAapDensityScaleTenths)
     }
+    var cpuBoostOffsetMhz by rememberSaveable {
+        mutableStateOf(initialCpuBoostOffsetMhz)
+    }
+    var cpuRuntimeState by remember {
+        mutableStateOf(ArdaCpuPerformance.readRuntimeState())
+    }
     var persistedLauncherMapOnRight by remember {
         mutableStateOf(initialLauncherMapOnRight)
     }
@@ -1022,6 +1031,16 @@ private fun ConfigScreen(
     }
     var persistedAapDensityScaleTenths by remember {
         mutableStateOf(initialAapDensityScaleTenths)
+    }
+    var persistedCpuBoostOffsetMhz by remember {
+        mutableStateOf(initialCpuBoostOffsetMhz)
+    }
+
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            cpuRuntimeState = ArdaCpuPerformance.readRuntimeState()
+            delay(1_000)
+        }
     }
 
     var launcherBackgroundMode by rememberSaveable {
@@ -1082,10 +1101,14 @@ private fun ConfigScreen(
         launcherMapWidthPercent = ArdaPlatformRepository.getLauncherMapWidthPercent(context)
         aapDensityScaleTenths =
             ArdaPlatformRepository.getAapDensityScaleTenths(context)
+        cpuBoostOffsetMhz =
+            ArdaCpuPerformance.getRequestedOffsetMhz(context)
         persistedSystemBarLayoutVertical = systemBarLayoutVertical
         persistedLauncherMapOnRight = launcherMapOnRight
         persistedLauncherMapWidthPercent = launcherMapWidthPercent
         persistedAapDensityScaleTenths = aapDensityScaleTenths
+        persistedCpuBoostOffsetMhz = cpuBoostOffsetMhz
+        cpuRuntimeState = ArdaCpuPerformance.readRuntimeState()
         val visualTheme = ArdaPlatformRepository.getVisualTheme(context)
         launcherBackgroundMode = visualTheme.launcherBackgroundMode
         launcherBackgroundColor = visualTheme.launcherBackgroundColor
@@ -1119,6 +1142,8 @@ private fun ConfigScreen(
             launcherMapWidthPercent != persistedLauncherMapWidthPercent
     val densityScaleDirty =
         aapDensityScaleTenths != persistedAapDensityScaleTenths
+    val cpuBoostDirty =
+        cpuBoostOffsetMhz != persistedCpuBoostOffsetMhz
     val launcherBackgroundColorValid =
         ArdaVisualTheme.isValidColor(launcherBackgroundColor)
     val navigationBarColorValid =
@@ -1153,7 +1178,7 @@ private fun ConfigScreen(
     val dirty =
         draft != null &&
             (bridgeConfigDirty || launcherLayoutDirty ||
-                densityScaleDirty || visualThemeDirty)
+                densityScaleDirty || cpuBoostDirty || visualThemeDirty)
 
     val selectedObservedVideoConfig = snapshot.videoState.advertisedConfigs
         .firstOrNull { it.configIndex == snapshot.videoState.selectedConfigIndex }
@@ -1308,6 +1333,98 @@ private fun ConfigScreen(
                             description = stringResource(R.string.keep_profiles_description),
                             checked = keepProfiles,
                             onCheckedChange = { keepProfiles = it },
+                        )
+                    }
+                }
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = surface),
+                    shape = RoundedCornerShape(22.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.cpu_performance_title),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = stringResource(R.string.cpu_performance_description),
+                            color = textSecondary,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+
+                        val targetCpuMhz =
+                            ArdaCpuPerformance.targetMhz(cpuBoostOffsetMhz)
+                        val offsetLabel = when {
+                            cpuBoostOffsetMhz > 0 -> "+${cpuBoostOffsetMhz}"
+                            else -> cpuBoostOffsetMhz.toString()
+                        }
+
+                        Text(
+                            text = stringResource(
+                                R.string.cpu_boost_label,
+                                offsetLabel,
+                                targetCpuMhz,
+                            ),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Slider(
+                            value = cpuBoostOffsetMhz.toFloat(),
+                            onValueChange = { value ->
+                                val stepped =
+                                    (value / ArdaCpuPerformance.stepMhz)
+                                        .roundToInt() *
+                                        ArdaCpuPerformance.stepMhz
+                                cpuBoostOffsetMhz = stepped.coerceIn(
+                                    ArdaCpuPerformance.minOffsetMhz,
+                                    ArdaCpuPerformance.maxOffsetMhz,
+                                )
+                            },
+                            valueRange =
+                                ArdaCpuPerformance.minOffsetMhz.toFloat()..
+                                    ArdaCpuPerformance.maxOffsetMhz.toFloat(),
+                            steps =
+                                (
+                                    (ArdaCpuPerformance.maxOffsetMhz -
+                                        ArdaCpuPerformance.minOffsetMhz) /
+                                        ArdaCpuPerformance.stepMhz
+                                    ) - 1,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                R.string.cpu_performance_runtime,
+                                cpuRuntimeState.currentMhz ?: 0,
+                                cpuRuntimeState.policyMaxMhz ?: 0,
+                                cpuRuntimeState.cpuInfoMaxMhz ?: 0,
+                                cpuRuntimeState.temperatureC ?: 0f,
+                            ),
+                            color = textSecondary,
+                            fontFamily = FontFamily.Monospace,
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+
+                        Text(
+                            text = stringResource(
+                                if (cpuBoostOffsetMhz == 0) {
+                                    R.string.cpu_performance_stock_hint
+                                } else {
+                                    R.string.cpu_performance_custom_hint
+                                },
+                            ),
+                            color = if (cpuBoostOffsetMhz > 0) warning else textSecondary,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+
+                        Text(
+                            text = stringResource(R.string.cpu_performance_thermal_guard),
+                            color = textSecondary,
+                            style = MaterialTheme.typography.bodySmall,
                         )
                     }
                 }
@@ -1828,6 +1945,10 @@ private fun ConfigScreen(
                                     context,
                                     aapDensityScaleTenths,
                                 )
+                                ArdaCpuPerformance.setRequestedOffsetMhz(
+                                    context,
+                                    cpuBoostOffsetMhz,
+                                )
                                 ArdaPlatformRepository.saveConfig(context, config)
                                 ArdaPlatformRepository.setSystemBarLayoutVertical(
                                     context,
@@ -1860,6 +1981,10 @@ private fun ConfigScreen(
                                 persistedLauncherMapWidthPercent = launcherMapWidthPercent
                                 persistedAapDensityScaleTenths =
                                     aapDensityScaleTenths
+                                persistedCpuBoostOffsetMhz =
+                                    cpuBoostOffsetMhz
+                                cpuRuntimeState =
+                                    ArdaCpuPerformance.readRuntimeState()
                                 persistedVisualTheme =
                                     ArdaPlatformRepository.getVisualTheme(context)
                                 onSnapshotChanged(
