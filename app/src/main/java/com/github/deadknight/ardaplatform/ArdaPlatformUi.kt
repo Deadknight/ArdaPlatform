@@ -1234,7 +1234,6 @@ private fun ConfigScreen(
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
                 // ARDA_CAPTURE_PROFILE_SELECTOR_V1
-                ArdaCaptureProfileSection()
 
                 Column {
                     Text(
@@ -1484,6 +1483,15 @@ private fun ConfigScreen(
                             text = stringResource(R.string.video_configuration_description),
                             color = textSecondary,
                             style = MaterialTheme.typography.bodyMedium,
+                        )
+
+                        ArdaCaptureProfileSection(
+                            embedded = true,
+                        )
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            color = divider,
                         )
 
                         VideoRouteSelector(

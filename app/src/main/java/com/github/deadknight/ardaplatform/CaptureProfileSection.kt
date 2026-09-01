@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun ArdaCaptureProfileSection(
     modifier: Modifier = Modifier,
+    embedded: Boolean = false,
 ) {
     val context = LocalContext.current
 
@@ -39,13 +40,14 @@ fun ArdaCaptureProfileSection(
 
     val active = ArdaCaptureProfileController.activeProfile()
 
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-    ) {
+
+    val captureProfileContent: @Composable () -> Unit = {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = if (embedded) {
+                Modifier.fillMaxWidth()
+            } else {
+                Modifier.padding(16.dp)
+            },
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("Video capture profile")
@@ -92,6 +94,18 @@ fun ArdaCaptureProfileSection(
             }
 
             status?.let { Text(it) }
+        }
+        }
+
+    if (embedded) {
+        captureProfileContent()
+    } else {
+        Card(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+        ) {
+            captureProfileContent()
         }
     }
 }
