@@ -13,11 +13,12 @@ import kotlin.math.roundToInt
  */
 object ArdaCpuPerformance {
     const val stockMhz = 1500
-    const val hardCeilingMhz = 1900
+    const val hardCeilingMhz = 3000
     const val minOffsetMhz = -200
-    const val maxOffsetMhz = 400
-    const val stepMhz = 50
+    const val maxOffsetMhz = 1500
+    const val stepMhz = 100
     const val defaultOffsetMhz = 0
+    const val highOverclockWarningMhz = 2000
 
     private const val requestedOffsetSetting = "arda_cpu_boost_mhz"
 

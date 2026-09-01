@@ -1421,6 +1421,18 @@ private fun ConfigScreen(
                                     ) - 1,
                         )
 
+                        if (
+                            targetCpuMhz >= ArdaCpuPerformance.highOverclockWarningMhz
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    R.string.cpu_performance_high_overclock_warning,
+                                ),
+                                color = warning,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+
                         Text(
                             text = stringResource(
                                 R.string.cpu_performance_runtime,
