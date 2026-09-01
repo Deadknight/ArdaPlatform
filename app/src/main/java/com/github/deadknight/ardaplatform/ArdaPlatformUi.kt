@@ -1005,6 +1005,9 @@ private fun ConfigScreen(
     val initialCpuBoostOffsetMhz = remember {
         ArdaCpuPerformance.getRequestedOffsetMhz(context)
     }
+    val initialVideoRouteState = remember {
+        ArdaVideoRouteController.readState()
+    }
     val initialVisualTheme = remember {
         ArdaPlatformRepository.getVisualTheme(context)
     }
@@ -1023,6 +1026,18 @@ private fun ConfigScreen(
     var cpuRuntimeState by remember {
         mutableStateOf(ArdaCpuPerformance.readRuntimeState())
     }
+    var videoRoute by rememberSaveable {
+        mutableStateOf(initialVideoRouteState.selected)
+    }
+    var persistedVideoRoute by remember {
+        mutableStateOf(initialVideoRouteState.selected)
+    }
+    var videoRouteRuntimeState by remember {
+        mutableStateOf(initialVideoRouteState)
+    }
+    var showVideoRouteRebootDialog by rememberSaveable {
+        mutableStateOf(false)
+    }
     var persistedLauncherMapOnRight by remember {
         mutableStateOf(initialLauncherMapOnRight)
     }
@@ -1039,6 +1054,7 @@ private fun ConfigScreen(
     LaunchedEffect(Unit) {
         while (isActive) {
             cpuRuntimeState = ArdaCpuPerformance.readRuntimeState()
+            videoRouteRuntimeState = ArdaVideoRouteController.readState()
             delay(1_000)
         }
     }
@@ -1103,6 +1119,10 @@ private fun ConfigScreen(
             ArdaPlatformRepository.getAapDensityScaleTenths(context)
         cpuBoostOffsetMhz =
             ArdaCpuPerformance.getRequestedOffsetMhz(context)
+        val routeState = ArdaVideoRouteController.readState()
+        videoRoute = routeState.selected
+        persistedVideoRoute = routeState.selected
+        videoRouteRuntimeState = routeState
         persistedSystemBarLayoutVertical = systemBarLayoutVertical
         persistedLauncherMapOnRight = launcherMapOnRight
         persistedLauncherMapWidthPercent = launcherMapWidthPercent
@@ -1144,6 +1164,8 @@ private fun ConfigScreen(
         aapDensityScaleTenths != persistedAapDensityScaleTenths
     val cpuBoostDirty =
         cpuBoostOffsetMhz != persistedCpuBoostOffsetMhz
+    val videoRouteDirty =
+        videoRoute != persistedVideoRoute
     val launcherBackgroundColorValid =
         ArdaVisualTheme.isValidColor(launcherBackgroundColor)
     val navigationBarColorValid =
@@ -1178,7 +1200,7 @@ private fun ConfigScreen(
     val dirty =
         draft != null &&
             (bridgeConfigDirty || launcherLayoutDirty ||
-                densityScaleDirty || cpuBoostDirty || visualThemeDirty)
+                densityScaleDirty || cpuBoostDirty || videoRouteDirty || visualThemeDirty)
 
     val selectedObservedVideoConfig = snapshot.videoState.advertisedConfigs
         .firstOrNull { it.configIndex == snapshot.videoState.selectedConfigIndex }
@@ -1448,6 +1470,47 @@ private fun ConfigScreen(
                             color = textSecondary,
                             style = MaterialTheme.typography.bodyMedium,
                         )
+
+                        VideoRouteSelector(
+                            selected = videoRoute,
+                            onSelected = { videoRoute = it },
+                        )
+                        Text(
+                            text = when (val active = videoRouteRuntimeState.active) {
+                                null -> stringResource(
+                                    R.string.video_route_runtime_unknown,
+                                    videoRouteRuntimeState.selected.propertyValue.uppercase(Locale.US),
+                                )
+                                else -> stringResource(
+                                    if (videoRouteRuntimeState.restartRequired) {
+                                        R.string.video_route_runtime_reboot_required
+                                    } else {
+                                        R.string.video_route_runtime_active
+                                    },
+                                    active.propertyValue.uppercase(Locale.US),
+                                    videoRouteRuntimeState.selected.propertyValue.uppercase(Locale.US),
+                                )
+                            },
+                            color = if (videoRouteRuntimeState.restartRequired) warning else textSecondary,
+                            fontFamily = FontFamily.Monospace,
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        if (videoRouteRuntimeState.restartRequired) {
+                            OutlinedButton(
+                                onClick = { showVideoRouteRebootDialog = true },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 52.dp),
+                            ) {
+                                Text(stringResource(R.string.video_route_reboot_action))
+                            }
+                        }
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            color = divider,
+                        )
+
                         VideoResolutionSelector(
                             forcedResolution = forcedVideoResolution,
                             observed = snapshot.videoState,
@@ -1949,6 +2012,7 @@ private fun ConfigScreen(
                                     context,
                                     cpuBoostOffsetMhz,
                                 )
+                                ArdaVideoRouteController.setSelected(videoRoute)
                                 ArdaPlatformRepository.saveConfig(context, config)
                                 ArdaPlatformRepository.setSystemBarLayoutVertical(
                                     context,
@@ -1983,8 +2047,11 @@ private fun ConfigScreen(
                                     aapDensityScaleTenths
                                 persistedCpuBoostOffsetMhz =
                                     cpuBoostOffsetMhz
+                                persistedVideoRoute = videoRoute
                                 cpuRuntimeState =
                                     ArdaCpuPerformance.readRuntimeState()
+                                videoRouteRuntimeState =
+                                    ArdaVideoRouteController.readState()
                                 persistedVisualTheme =
                                     ArdaPlatformRepository.getVisualTheme(context)
                                 onSnapshotChanged(
@@ -2015,6 +2082,43 @@ private fun ConfigScreen(
                 }
             }
 
+            if (showVideoRouteRebootDialog) {
+                AlertDialog(
+                    onDismissRequest = { showVideoRouteRebootDialog = false },
+                    title = {
+                        Text(stringResource(R.string.video_route_reboot_dialog_title))
+                    },
+                    text = {
+                        Text(stringResource(R.string.video_route_reboot_dialog_description))
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showVideoRouteRebootDialog = false
+                                runCatching {
+                                    ArdaVideoRouteController.rebootToApply(context)
+                                }.onFailure { error ->
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar(
+                                            error.message ?: saveFailedMessage,
+                                        )
+                                    }
+                                }
+                            },
+                        ) {
+                            Text(stringResource(R.string.video_route_reboot_confirm))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { showVideoRouteRebootDialog = false },
+                        ) {
+                            Text(stringResource(R.string.action_cancel))
+                        }
+                    },
+                )
+            }
+
             SnackbarHost(
                 hostState = snackbarHostState,
                 modifier = Modifier
@@ -2025,6 +2129,77 @@ private fun ConfigScreen(
     }
 }
 
+
+@Composable
+private fun VideoRouteSelector(
+    selected: ArdaVideoRoute,
+    onSelected: (ArdaVideoRoute) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedLabel = when (selected) {
+        ArdaVideoRoute.Hdmi -> stringResource(R.string.video_route_hdmi)
+        ArdaVideoRoute.Txp -> stringResource(R.string.video_route_txp)
+    }
+
+    Box {
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp),
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.Start,
+            ) {
+                Text(
+                    text = stringResource(R.string.video_route_label),
+                    color = textSecondary,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Text(text = selectedLabel, fontWeight = FontWeight.Bold)
+            }
+            Text("▾")
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            DropdownMenuItem(
+                text = {
+                    Column {
+                        Text(stringResource(R.string.video_route_hdmi))
+                        Text(
+                            stringResource(R.string.video_route_hdmi_description),
+                            color = textSecondary,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                },
+                onClick = {
+                    onSelected(ArdaVideoRoute.Hdmi)
+                    expanded = false
+                },
+            )
+            DropdownMenuItem(
+                text = {
+                    Column {
+                        Text(stringResource(R.string.video_route_txp))
+                        Text(
+                            stringResource(R.string.video_route_txp_description),
+                            color = textSecondary,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                },
+                onClick = {
+                    onSelected(ArdaVideoRoute.Txp)
+                    expanded = false
+                },
+            )
+        }
+    }
+}
 
 @Composable
 private fun VideoResolutionSelector(

@@ -142,6 +142,18 @@
 
     <string name="video_configuration_title">Android Auto video</string>
     <string name="video_configuration_description">Force a head-unit video resolution for the next AAP session. Auto selects the highest locally compatible quality, currently up to 1280×720.</string>
+    <string name="video_route_label">Video path</string>
+    <string name="video_route_hdmi">HDMI · Direct PCT</string>
+    <string name="video_route_hdmi_description">Default. Direct 1920×1080 physical client target with the pipelined codec path.</string>
+    <string name="video_route_txp">TXP · Production fallback</string>
+    <string name="video_route_txp_description">Normal HWC/TXP writeback path kept as the known-good production fallback.</string>
+    <string name="video_route_runtime_active">Active: %1$s · selected: %2$s</string>
+    <string name="video_route_runtime_reboot_required">Active: %1$s · selected: %2$s · reboot required</string>
+    <string name="video_route_runtime_unknown">Active route unavailable · selected: %1$s</string>
+    <string name="video_route_reboot_action">Reboot to apply video path</string>
+    <string name="video_route_reboot_dialog_title">Apply video path now?</string>
+    <string name="video_route_reboot_dialog_description">The head unit will reboot. Android Auto will reconnect after boot using the selected video path.</string>
+    <string name="video_route_reboot_confirm">Reboot now</string>
     <string name="video_force_label">Forced video configuration</string>
     <string name="video_force_auto">Auto · best compatible</string>
     <string name="video_density_scale_label">Density scale · %1$.1f×</string>
