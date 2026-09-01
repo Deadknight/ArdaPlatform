@@ -1233,6 +1233,9 @@ private fun ConfigScreen(
                     ),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
+                // ARDA_CAPTURE_PROFILE_SELECTOR_V1
+                ArdaCaptureProfileSection()
+
                 Column {
                     Text(
                         text = stringResource(R.string.configuration_title),
