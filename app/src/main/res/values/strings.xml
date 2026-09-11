@@ -141,7 +141,7 @@
     <string name="vehicle_property_unknown">Vehicle property %1$d</string>
 
     <string name="video_configuration_title">Android Auto video</string>
-    <string name="video_configuration_description">Force a head-unit video resolution for the next AAP session. Auto selects the highest locally compatible quality, currently up to 1280×720.</string>
+    <string name="video_configuration_description">Force a head-unit video resolution for the next AAP session. Auto selects the highest locally compatible quality, currently up to 1920×1080.</string>
     <string name="video_route_label">Video path</string>
     <string name="video_route_hdmi">HDMI · Direct PCT</string>
     <string name="video_route_hdmi_description">Default. Direct 1920×1080 physical client target with the pipelined codec path.</string>
@@ -206,4 +206,11 @@
     <string name="cpu_performance_thermal_guard">Automatic protection: at 78 °C the root tuner clamps back to stock; requested boost is allowed again after cooling to 72 °C.</string>
 
     <string name="cpu_performance_high_overclock_warning">⚠ High overclock: 2.0 GHz and above may cause instability or overheating. The applied frequency remains limited by the current firmware/supervisor ceiling.</string>
+
+    <string name="system_bar_respect_safe_area_title">Respect Android Auto safe area</string>
+    <string name="system_bar_respect_safe_area_description">Shortens the actual system bar windows to the head unit safe area. Unsafe edge regions show the underlying global background.</string>
+    <string name="dock_recent_map_title">Show recent map app</string>
+    <string name="dock_recent_map_description">Keeps the most recently used maps or navigation app immediately before the general recent app.</string>
+    <string name="dock_recent_app_title">Show recent app</string>
+    <string name="dock_recent_app_description">Shows the most recently used non-map app as the final dynamic dock item.</string>
 </resources>

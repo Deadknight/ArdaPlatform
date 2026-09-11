@@ -40,6 +40,14 @@ object ArdaPlatformRepository {
         "arda_left_rail_runtime_active"
     private const val systemBarLayoutModeSetting =
         "arda_system_bar_layout_mode"
+
+    // ARDA_SYSTEMBAR_SAFE_RECENTS_SETTINGS_V1
+    private const val systemBarRespectSafeAreaSetting =
+        "arda_system_bar_respect_safe_area"
+    private const val dockShowRecentMapSetting =
+        "arda_dock_show_recent_map"
+    private const val dockShowRecentAppSetting =
+        "arda_dock_show_recent_app"
     private const val aapDensityScaleTenthsSetting =
         "arda_aap_density_scale_tenths"
     private const val systemBarLayoutHorizontal = 0
@@ -140,6 +148,64 @@ object ArdaPlatformRepository {
         }.getOrNull()
         return VehicleProfileRuntimeStatus.fromBundle(result)
     }
+
+    fun isSystemBarRespectSafeAreaEnabled(context: Context): Boolean =
+        Settings.Global.getInt(
+            context.contentResolver,
+            systemBarRespectSafeAreaSetting,
+            1,
+        ) != 0
+
+    fun setSystemBarRespectSafeAreaEnabled(context: Context, enabled: Boolean) {
+        check(
+            Settings.Global.putInt(
+                context.contentResolver,
+                systemBarRespectSafeAreaSetting,
+                if (enabled) 1 else 0,
+            ),
+        ) {
+            "Could not update the system bar safe-area setting."
+        }
+    }
+
+    fun isDockShowRecentMapEnabled(context: Context): Boolean =
+        Settings.Global.getInt(
+            context.contentResolver,
+            dockShowRecentMapSetting,
+            1,
+        ) != 0
+
+    fun setDockShowRecentMapEnabled(context: Context, enabled: Boolean) {
+        check(
+            Settings.Global.putInt(
+                context.contentResolver,
+                dockShowRecentMapSetting,
+                if (enabled) 1 else 0,
+            ),
+        ) {
+            "Could not update the recent map dock setting."
+        }
+    }
+
+    fun isDockShowRecentAppEnabled(context: Context): Boolean =
+        Settings.Global.getInt(
+            context.contentResolver,
+            dockShowRecentAppSetting,
+            1,
+        ) != 0
+
+    fun setDockShowRecentAppEnabled(context: Context, enabled: Boolean) {
+        check(
+            Settings.Global.putInt(
+                context.contentResolver,
+                dockShowRecentAppSetting,
+                if (enabled) 1 else 0,
+            ),
+        ) {
+            "Could not update the recent app dock setting."
+        }
+    }
+
 
     fun isBottomHvacVisible(context: Context): Boolean =
         Settings.Global.getInt(

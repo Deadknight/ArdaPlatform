@@ -110,6 +110,43 @@ private val ardaColors = darkColorScheme(
     error = danger,
 )
 
+@Composable
+private fun ArdaSettingsToggleRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 20.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+        )
+    }
+}
+
 private enum class PlatformTab(
     @StringRes val titleRes: Int,
     @StringRes val glyphRes: Int,
@@ -993,6 +1030,38 @@ private fun ConfigScreen(
     var persistedSystemBarLayoutVertical by remember {
         mutableStateOf(initialSystemBarLayoutVertical)
     }
+
+    // ARDA_SYSTEMBAR_SAFE_RECENTS_SETTINGS_V1
+    val initialSystemBarRespectSafeArea = remember {
+        ArdaPlatformRepository.isSystemBarRespectSafeAreaEnabled(context)
+    }
+    var systemBarRespectSafeArea by rememberSaveable {
+        mutableStateOf(initialSystemBarRespectSafeArea)
+    }
+    var persistedSystemBarRespectSafeArea by remember {
+        mutableStateOf(initialSystemBarRespectSafeArea)
+    }
+
+    val initialDockShowRecentMap = remember {
+        ArdaPlatformRepository.isDockShowRecentMapEnabled(context)
+    }
+    var dockShowRecentMap by rememberSaveable {
+        mutableStateOf(initialDockShowRecentMap)
+    }
+    var persistedDockShowRecentMap by remember {
+        mutableStateOf(initialDockShowRecentMap)
+    }
+
+    val initialDockShowRecentApp = remember {
+        ArdaPlatformRepository.isDockShowRecentAppEnabled(context)
+    }
+    var dockShowRecentApp by rememberSaveable {
+        mutableStateOf(initialDockShowRecentApp)
+    }
+    var persistedDockShowRecentApp by remember {
+        mutableStateOf(initialDockShowRecentApp)
+    }
+
     val initialLauncherMapOnRight = remember {
         ArdaPlatformRepository.isLauncherMapOnRight(context)
     }
@@ -1113,6 +1182,12 @@ private fun ConfigScreen(
             ArdaPlatformRepository.isBottomHvacVisible(context)
         systemBarLayoutVertical =
             ArdaPlatformRepository.isSystemBarLayoutVertical(context)
+        systemBarRespectSafeArea =
+            ArdaPlatformRepository.isSystemBarRespectSafeAreaEnabled(context)
+        dockShowRecentMap =
+            ArdaPlatformRepository.isDockShowRecentMapEnabled(context)
+        dockShowRecentApp =
+            ArdaPlatformRepository.isDockShowRecentAppEnabled(context)
         launcherMapOnRight = ArdaPlatformRepository.isLauncherMapOnRight(context)
         launcherMapWidthPercent = ArdaPlatformRepository.getLauncherMapWidthPercent(context)
         aapDensityScaleTenths =
@@ -1124,6 +1199,9 @@ private fun ConfigScreen(
         persistedVideoRoute = routeState.selected
         videoRouteRuntimeState = routeState
         persistedSystemBarLayoutVertical = systemBarLayoutVertical
+        persistedSystemBarRespectSafeArea = systemBarRespectSafeArea
+        persistedDockShowRecentMap = dockShowRecentMap
+        persistedDockShowRecentApp = dockShowRecentApp
         persistedLauncherMapOnRight = launcherMapOnRight
         persistedLauncherMapWidthPercent = launcherMapWidthPercent
         persistedAapDensityScaleTenths = aapDensityScaleTenths
@@ -1158,6 +1236,9 @@ private fun ConfigScreen(
     val bridgeConfigDirty = draft != null && draft != persisted
     val launcherLayoutDirty =
         systemBarLayoutVertical != persistedSystemBarLayoutVertical ||
+            systemBarRespectSafeArea != persistedSystemBarRespectSafeArea ||
+            dockShowRecentMap != persistedDockShowRecentMap ||
+            dockShowRecentApp != persistedDockShowRecentApp ||
             launcherMapOnRight != persistedLauncherMapOnRight ||
             launcherMapWidthPercent != persistedLauncherMapWidthPercent
     val densityScaleDirty =
@@ -1773,6 +1854,27 @@ private fun ConfigScreen(
                             },
                         )
 
+                        // ARDA_SYSTEMBAR_SAFE_RECENTS_SETTINGS_V1
+                        ArdaSettingsToggleRow(
+                            title = stringResource(R.string.system_bar_respect_safe_area_title),
+                            description = stringResource(R.string.system_bar_respect_safe_area_description),
+                            checked = systemBarRespectSafeArea,
+                            onCheckedChange = { systemBarRespectSafeArea = it },
+                        )
+                        HorizontalDivider(color = divider)
+                        ArdaSettingsToggleRow(
+                            title = stringResource(R.string.dock_recent_map_title),
+                            description = stringResource(R.string.dock_recent_map_description),
+                            checked = dockShowRecentMap,
+                            onCheckedChange = { dockShowRecentMap = it },
+                        )
+                        ArdaSettingsToggleRow(
+                            title = stringResource(R.string.dock_recent_app_title),
+                            description = stringResource(R.string.dock_recent_app_description),
+                            checked = dockShowRecentApp,
+                            onCheckedChange = { dockShowRecentApp = it },
+                        )
+                        HorizontalDivider(color = divider)
                         HorizontalDivider(
                             modifier = Modifier.padding(vertical = 18.dp),
                             color = divider,
@@ -2037,6 +2139,18 @@ private fun ConfigScreen(
                                 )
                                 ArdaVideoRouteController.setSelected(videoRoute)
                                 ArdaPlatformRepository.saveConfig(context, config)
+                                ArdaPlatformRepository.setSystemBarRespectSafeAreaEnabled(
+                                    context,
+                                    systemBarRespectSafeArea,
+                                )
+                                ArdaPlatformRepository.setDockShowRecentMapEnabled(
+                                    context,
+                                    dockShowRecentMap,
+                                )
+                                ArdaPlatformRepository.setDockShowRecentAppEnabled(
+                                    context,
+                                    dockShowRecentApp,
+                                )
                                 ArdaPlatformRepository.setSystemBarLayoutVertical(
                                     context,
                                     systemBarLayoutVertical,
@@ -2064,6 +2178,9 @@ private fun ConfigScreen(
                                 persisted = config
                                 persistedSystemBarLayoutVertical =
                                     systemBarLayoutVertical
+                                persistedSystemBarRespectSafeArea = systemBarRespectSafeArea
+                                persistedDockShowRecentMap = dockShowRecentMap
+                                persistedDockShowRecentApp = dockShowRecentApp
                                 persistedLauncherMapOnRight = launcherMapOnRight
                                 persistedLauncherMapWidthPercent = launcherMapWidthPercent
                                 persistedAapDensityScaleTenths =
