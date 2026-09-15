@@ -1077,6 +1077,12 @@ private fun ConfigScreen(
     val initialVideoRouteState = remember {
         ArdaVideoRouteController.readState()
     }
+    val initialVideoHardwareProfile = remember {
+        ArdaVideoHardwareProfileController.getHardwareProfile(context)
+    }
+    val initialVideoFpsMode = remember {
+        ArdaVideoHardwareProfileController.getFpsMode(context)
+    }
     val initialVisualTheme = remember {
         ArdaPlatformRepository.getVisualTheme(context)
     }
@@ -1106,6 +1112,18 @@ private fun ConfigScreen(
     }
     var showVideoRouteRebootDialog by rememberSaveable {
         mutableStateOf(false)
+    }
+    var videoHardwareProfile by rememberSaveable {
+        mutableStateOf(initialVideoHardwareProfile)
+    }
+    var persistedVideoHardwareProfile by remember {
+        mutableStateOf(initialVideoHardwareProfile)
+    }
+    var videoFpsMode by rememberSaveable {
+        mutableStateOf(initialVideoFpsMode)
+    }
+    var persistedVideoFpsMode by remember {
+        mutableStateOf(initialVideoFpsMode)
     }
     var persistedLauncherMapOnRight by remember {
         mutableStateOf(initialLauncherMapOnRight)
@@ -1198,6 +1216,12 @@ private fun ConfigScreen(
         videoRoute = routeState.selected
         persistedVideoRoute = routeState.selected
         videoRouteRuntimeState = routeState
+        videoHardwareProfile =
+            ArdaVideoHardwareProfileController.getHardwareProfile(context)
+        persistedVideoHardwareProfile = videoHardwareProfile
+        videoFpsMode =
+            ArdaVideoHardwareProfileController.getFpsMode(context)
+        persistedVideoFpsMode = videoFpsMode
         persistedSystemBarLayoutVertical = systemBarLayoutVertical
         persistedSystemBarRespectSafeArea = systemBarRespectSafeArea
         persistedDockShowRecentMap = dockShowRecentMap
@@ -1247,6 +1271,10 @@ private fun ConfigScreen(
         cpuBoostOffsetMhz != persistedCpuBoostOffsetMhz
     val videoRouteDirty =
         videoRoute != persistedVideoRoute
+    val videoHardwareProfileDirty =
+        videoHardwareProfile != persistedVideoHardwareProfile
+    val videoFpsModeDirty =
+        videoFpsMode != persistedVideoFpsMode
     val launcherBackgroundColorValid =
         ArdaVisualTheme.isValidColor(launcherBackgroundColor)
     val navigationBarColorValid =
@@ -1281,7 +1309,8 @@ private fun ConfigScreen(
     val dirty =
         draft != null &&
             (bridgeConfigDirty || launcherLayoutDirty ||
-                densityScaleDirty || cpuBoostDirty || videoRouteDirty || visualThemeDirty)
+                densityScaleDirty || cpuBoostDirty || videoRouteDirty ||
+                videoHardwareProfileDirty || videoFpsModeDirty || visualThemeDirty)
 
     val selectedObservedVideoConfig = snapshot.videoState.advertisedConfigs
         .firstOrNull { it.configIndex == snapshot.videoState.selectedConfigIndex }
@@ -1568,6 +1597,40 @@ private fun ConfigScreen(
 
                         ArdaCaptureProfileSection(
                             embedded = true,
+                        )
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            color = divider,
+                        )
+
+                        VideoHardwareProfileSelector(
+                            selected = videoHardwareProfile,
+                            onSelected = { videoHardwareProfile = it },
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.video_hw_profile_resolved,
+                                when (
+                                    ArdaVideoHardwareProfileController
+                                        .resolveHardwareProfile(videoHardwareProfile)
+                                ) {
+                                    ArdaVideoHardwareProfile.Pi4Hdmi ->
+                                        stringResource(R.string.video_hw_profile_pi4)
+                                    ArdaVideoHardwareProfile.Pi5HwcVds ->
+                                        stringResource(R.string.video_hw_profile_pi5)
+                                    ArdaVideoHardwareProfile.Auto ->
+                                        stringResource(R.string.video_hw_profile_auto)
+                                },
+                            ),
+                            color = textSecondary,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+
+                        VideoFpsModeSelector(
+                            selected = videoFpsMode,
+                            hardwareProfile = videoHardwareProfile,
+                            onSelected = { videoFpsMode = it },
                         )
 
                         HorizontalDivider(
@@ -2138,6 +2201,14 @@ private fun ConfigScreen(
                                     cpuBoostOffsetMhz,
                                 )
                                 ArdaVideoRouteController.setSelected(videoRoute)
+                                ArdaVideoHardwareProfileController.setHardwareProfile(
+                                    context,
+                                    videoHardwareProfile,
+                                )
+                                ArdaVideoHardwareProfileController.setFpsMode(
+                                    context,
+                                    videoFpsMode,
+                                )
                                 ArdaPlatformRepository.saveConfig(context, config)
                                 ArdaPlatformRepository.setSystemBarRespectSafeAreaEnabled(
                                     context,
@@ -2188,6 +2259,8 @@ private fun ConfigScreen(
                                 persistedCpuBoostOffsetMhz =
                                     cpuBoostOffsetMhz
                                 persistedVideoRoute = videoRoute
+                                persistedVideoHardwareProfile = videoHardwareProfile
+                                persistedVideoFpsMode = videoFpsMode
                                 cpuRuntimeState =
                                     ArdaCpuPerformance.readRuntimeState()
                                 videoRouteRuntimeState =
@@ -2269,6 +2342,190 @@ private fun ConfigScreen(
     }
 }
 
+
+@Composable
+private fun VideoHardwareProfileSelector(
+    selected: ArdaVideoHardwareProfile,
+    onSelected: (ArdaVideoHardwareProfile) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    @Composable
+    fun label(profile: ArdaVideoHardwareProfile): String =
+        when (profile) {
+            ArdaVideoHardwareProfile.Auto ->
+                stringResource(R.string.video_hw_profile_auto)
+            ArdaVideoHardwareProfile.Pi4Hdmi ->
+                stringResource(R.string.video_hw_profile_pi4)
+            ArdaVideoHardwareProfile.Pi5HwcVds ->
+                stringResource(R.string.video_hw_profile_pi5)
+        }
+
+    Box {
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp),
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.Start,
+            ) {
+                Text(
+                    text = stringResource(R.string.video_hw_profile_label),
+                    color = textSecondary,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Text(text = label(selected), fontWeight = FontWeight.Bold)
+            }
+            Text("▾")
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            listOf(
+                ArdaVideoHardwareProfile.Auto to
+                    R.string.video_hw_profile_auto_description,
+                ArdaVideoHardwareProfile.Pi4Hdmi to
+                    R.string.video_hw_profile_pi4_description,
+                ArdaVideoHardwareProfile.Pi5HwcVds to
+                    R.string.video_hw_profile_pi5_description,
+            ).forEach { (profile, descriptionRes) ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(label(profile))
+                            Text(
+                                stringResource(descriptionRes),
+                                color = textSecondary,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    },
+                    onClick = {
+                        onSelected(profile)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoFpsModeSelector(
+    selected: ArdaVideoFpsMode,
+    hardwareProfile: ArdaVideoHardwareProfile,
+    onSelected: (ArdaVideoFpsMode) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    @Composable
+    fun label(mode: ArdaVideoFpsMode): String =
+        when (mode) {
+            ArdaVideoFpsMode.Auto ->
+                stringResource(R.string.video_fps_auto)
+            ArdaVideoFpsMode.Optimal ->
+                stringResource(R.string.video_fps_optimal)
+            else ->
+                stringResource(
+                    R.string.video_fps_manual,
+                    requireNotNull(mode.manualCap),
+                )
+        }
+
+    val selectedDescription = when (selected) {
+        ArdaVideoFpsMode.Auto ->
+            stringResource(R.string.video_fps_auto_description)
+        ArdaVideoFpsMode.Optimal ->
+            stringResource(
+                R.string.video_fps_optimal_description,
+                ArdaVideoHardwareProfileController.optimalFpsCap(hardwareProfile),
+            )
+        else ->
+            stringResource(
+                R.string.video_fps_manual_description,
+                requireNotNull(selected.manualCap),
+            )
+    }
+
+    Box {
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp),
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.Start,
+            ) {
+                Text(
+                    text = stringResource(R.string.video_fps_limit_label),
+                    color = textSecondary,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Text(text = label(selected), fontWeight = FontWeight.Bold)
+            }
+            Text("▾")
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            ArdaVideoFpsMode.entries.forEach { mode ->
+                val description = when (mode) {
+                    ArdaVideoFpsMode.Auto ->
+                        stringResource(R.string.video_fps_auto_description)
+                    ArdaVideoFpsMode.Optimal ->
+                        stringResource(
+                            R.string.video_fps_optimal_description,
+                            ArdaVideoHardwareProfileController
+                                .optimalFpsCap(hardwareProfile),
+                        )
+                    else ->
+                        stringResource(
+                            R.string.video_fps_manual_description,
+                            requireNotNull(mode.manualCap),
+                        )
+                }
+
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(label(mode))
+                            Text(
+                                description,
+                                color = textSecondary,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    },
+                    onClick = {
+                        onSelected(mode)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+
+    Spacer(Modifier.height(4.dp))
+    Text(
+        text = selectedDescription,
+        color = textSecondary,
+        style = MaterialTheme.typography.bodySmall,
+    )
+    Text(
+        text = stringResource(R.string.video_fps_next_session),
+        color = textSecondary,
+        style = MaterialTheme.typography.labelSmall,
+    )
+}
 
 @Composable
 private fun VideoRouteSelector(

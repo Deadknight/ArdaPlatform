@@ -142,6 +142,22 @@
 
     <string name="video_configuration_title">Android Auto video</string>
     <string name="video_configuration_description">Force a head-unit video resolution for the next AAP session. Auto selects the highest locally compatible quality, currently up to 1920×1080.</string>
+    <string name="video_hw_profile_label">Hardware video profile</string>
+    <string name="video_hw_profile_auto">Auto · board detected</string>
+    <string name="video_hw_profile_auto_description">Recommended. Detects Pi 4/bcm2711 or Pi 5/bcm2712 when the next Android Auto session starts.</string>
+    <string name="video_hw_profile_pi4">Pi 4 · HDMI legacy</string>
+    <string name="video_hw_profile_pi4_description">Uses the Pi 4 legacy runtime: HWC virtual-display acceleration disabled and the V4L2 AVC encoder selected by default.</string>
+    <string name="video_hw_profile_pi5">Pi 5 · HWC-VDS performance</string>
+    <string name="video_hw_profile_pi5_description">Uses the proven Pi 5 runtime: HWC virtual display enabled and c2.android.avc.encoder with the persistent BT.709 NEON conversion path.</string>
+    <string name="video_hw_profile_resolved">Resolved on this board: %1$s</string>
+    <string name="video_fps_limit_label">FPS limit</string>
+    <string name="video_fps_auto">Auto · HU negotiated</string>
+    <string name="video_fps_optimal">Optimal · board recommended</string>
+    <string name="video_fps_manual">%1$d fps cap</string>
+    <string name="video_fps_auto_description">Follows the HU/SDR advertised frame rate with no extra board cap, up to the current 60 fps AAP engine limit.</string>
+    <string name="video_fps_optimal_description">Board-aware cap. The current hardware profile recommends up to %1$d fps; lower HU rates remain lower.</string>
+    <string name="video_fps_manual_description">Caps the stream at %1$d fps. If the HU advertises a lower rate, the lower HU rate wins.</string>
+    <string name="video_fps_next_session">Hardware profile and FPS limit take effect on the next Android Auto session.</string>
     <string name="video_route_label">Video path</string>
     <string name="video_route_hdmi">HDMI · Direct PCT</string>
     <string name="video_route_hdmi_description">Default. Direct 1920×1080 physical client target with the pipelined codec path.</string>
