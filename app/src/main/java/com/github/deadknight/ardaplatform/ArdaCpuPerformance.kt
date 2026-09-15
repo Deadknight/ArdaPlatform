@@ -1,6 +1,7 @@
 package com.github.deadknight.ardaplatform
 
 import android.content.Context
+import android.os.Build
 import android.provider.Settings
 import java.io.File
 import kotlin.math.roundToInt
@@ -8,17 +9,23 @@ import kotlin.math.roundToInt
 /**
  * UI-side contract for the root-owned ARDA CPU tuner.
  *
- * The firmware boot ceiling is intentionally higher than the default runtime
- * policy. An absent setting always means stock 1500 MHz.
+ * Offset 0 means this board's ARDA baseline, not a fixed global MHz value.
+ * Raspberry Pi 4 uses the project's 1900 MHz baseline; Raspberry Pi 5 uses
+ * the 2400 MHz platform baseline.
+ *
+ * Requests outside the currently exposed cpufreq OPP range may be stored by
+ * the UI but require boot/firmware support before they can become active.
  */
 object ArdaCpuPerformance {
-    const val stockMhz = 1500
-    const val hardCeilingMhz = 3000
-    const val minOffsetMhz = -200
-    const val maxOffsetMhz = 1500
+    const val rpi4BaselineMhz = 1900
+    const val rpi5BaselineMhz = 2400
+
+    const val minOffsetMhz = -1000
+    const val maxOffsetMhz = 1000
     const val stepMhz = 100
     const val defaultOffsetMhz = 0
-    const val highOverclockWarningMhz = 2000
+
+    const val highOverclockWarningOffsetMhz = 500
 
     private const val requestedOffsetSetting = "arda_cpu_boost_mhz"
 
@@ -54,9 +61,22 @@ object ArdaCpuPerformance {
         }
     }
 
+    fun baselineMhz(): Int {
+        val hardware = Build.HARDWARE.orEmpty().lowercase()
+        val board = Build.BOARD.orEmpty().lowercase()
+
+        return when {
+            hardware.contains("rpi5") || board == "bcm2712" -> rpi5BaselineMhz
+            hardware.contains("rpi4") || board == "bcm2711" -> rpi4BaselineMhz
+            else -> readKhz("cpuinfo_max_freq") ?: rpi5BaselineMhz
+        }
+    }
+
     fun targetMhz(offsetMhz: Int): Int =
-        (stockMhz + normalizeOffset(offsetMhz))
-            .coerceIn(stockMhz + minOffsetMhz, hardCeilingMhz)
+        baselineMhz() + normalizeOffset(offsetMhz)
+
+    fun isHighOverclockOffset(offsetMhz: Int): Boolean =
+        normalizeOffset(offsetMhz) >= highOverclockWarningOffsetMhz
 
     fun readRuntimeState(): RuntimeState =
         RuntimeState(

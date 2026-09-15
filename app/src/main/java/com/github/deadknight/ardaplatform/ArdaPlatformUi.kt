@@ -1502,7 +1502,7 @@ private fun ConfigScreen(
                         )
 
                         if (
-                            targetCpuMhz >= ArdaCpuPerformance.highOverclockWarningMhz
+                            ArdaCpuPerformance.isHighOverclockOffset(cpuBoostOffsetMhz)
                         ) {
                             Text(
                                 text = stringResource(

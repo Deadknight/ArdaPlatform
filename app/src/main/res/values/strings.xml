@@ -198,15 +198,13 @@
 
 
     <string name="cpu_performance_title">Performance</string>
-    <string name="cpu_performance_description">Sets the dynamic CPU maximum. Stock remains the default; the ondemand governor still lowers frequency when full performance is not needed.</string>
+    <string name="cpu_performance_description">Sets an offset around this board\'s default CPU maximum. 0 MHz keeps the board baseline; the governor still lowers frequency when full performance is not needed.</string>
     <string name="cpu_boost_label">CPU boost · %1$s MHz · target max %2$d MHz</string>
     <string name="cpu_performance_runtime">Current %1$d MHz · policy max %2$d MHz · hardware ceiling %3$d MHz · %4$.1f °C</string>
-    <string name="cpu_performance_stock_hint">Default · stock 1500 MHz. No overclock is applied unless you explicitly select a positive boost.</string>
-    <string name="cpu_performance_custom_hint">Custom CPU maximum in 100 MHz steps. Values above 1500 MHz are overclock profiles; Save &amp; apply is required.</string>
-    <string name="cpu_performance_thermal_guard">Automatic protection: at 78 °C the root tuner clamps back to stock; requested boost is allowed again after cooling to 72 °C.</string>
-
-    <string name="cpu_performance_high_overclock_warning">⚠ High overclock: 2.0 GHz and above may cause instability or overheating. The applied frequency remains limited by the current firmware/supervisor ceiling.</string>
-
+    <string name="cpu_performance_stock_hint">Default · board baseline. No overclock or underclock offset is requested.</string>
+    <string name="cpu_performance_custom_hint">Custom CPU maximum in 100 MHz steps relative to the board baseline. Positive values request overclock; negative values request underclock. Save &amp; apply is required.</string>
+    <string name="cpu_performance_thermal_guard">Automatic protection: at 78 °C a positive overclock request is clamped back to the board baseline; it is allowed again after cooling to 72 °C.</string>
+    <string name="cpu_performance_high_overclock_warning">⚠ High overclock: +500 MHz and above may cause instability, overheating, or data loss. Requests above the currently exposed hardware ceiling require boot/firmware support and a reboot before they can become active.</string>
     <string name="system_bar_respect_safe_area_title">Respect Android Auto safe area</string>
     <string name="system_bar_respect_safe_area_description">Shortens the actual system bar windows to the head unit safe area. Unsafe edge regions show the underlying global background.</string>
     <string name="dock_recent_map_title">Show recent map app</string>
