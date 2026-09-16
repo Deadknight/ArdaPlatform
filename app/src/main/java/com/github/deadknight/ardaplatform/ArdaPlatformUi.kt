@@ -1083,6 +1083,16 @@ private fun ConfigScreen(
     val initialVideoFpsMode = remember {
         ArdaVideoHardwareProfileController.getFpsMode(context)
     }
+    // ARDA_C2_ENCODER_TUNING_UI_V1
+    val initialVideoGpuI420 = remember {
+        ArdaVideoHardwareProfileController.getGpuI420Enabled(context)
+    }
+    val initialVideoIveSpeed = remember {
+        ArdaVideoHardwareProfileController.getIveSpeed(context)
+    }
+    val initialVideoBitrateBps = remember {
+        ArdaVideoHardwareProfileController.getBitrateBps(context)
+    }
     val initialVisualTheme = remember {
         ArdaPlatformRepository.getVisualTheme(context)
     }
@@ -1124,6 +1134,25 @@ private fun ConfigScreen(
     }
     var persistedVideoFpsMode by remember {
         mutableStateOf(initialVideoFpsMode)
+    }
+    // ARDA_C2_ENCODER_TUNING_UI_V1
+    var videoGpuI420 by rememberSaveable {
+        mutableStateOf(initialVideoGpuI420)
+    }
+    var persistedVideoGpuI420 by remember {
+        mutableStateOf(initialVideoGpuI420)
+    }
+    var videoIveSpeed by rememberSaveable {
+        mutableStateOf(initialVideoIveSpeed)
+    }
+    var persistedVideoIveSpeed by remember {
+        mutableStateOf(initialVideoIveSpeed)
+    }
+    var videoBitrateInput by rememberSaveable {
+        mutableStateOf(initialVideoBitrateBps.toString())
+    }
+    var persistedVideoBitrateInput by remember {
+        mutableStateOf(initialVideoBitrateBps.toString())
     }
     var persistedLauncherMapOnRight by remember {
         mutableStateOf(initialLauncherMapOnRight)
@@ -1222,6 +1251,15 @@ private fun ConfigScreen(
         videoFpsMode =
             ArdaVideoHardwareProfileController.getFpsMode(context)
         persistedVideoFpsMode = videoFpsMode
+        videoGpuI420 =
+            ArdaVideoHardwareProfileController.getGpuI420Enabled(context)
+        persistedVideoGpuI420 = videoGpuI420
+        videoIveSpeed =
+            ArdaVideoHardwareProfileController.getIveSpeed(context)
+        persistedVideoIveSpeed = videoIveSpeed
+        videoBitrateInput =
+            ArdaVideoHardwareProfileController.getBitrateBps(context).toString()
+        persistedVideoBitrateInput = videoBitrateInput
         persistedSystemBarLayoutVertical = systemBarLayoutVertical
         persistedSystemBarRespectSafeArea = systemBarRespectSafeArea
         persistedDockShowRecentMap = dockShowRecentMap
@@ -1275,6 +1313,27 @@ private fun ConfigScreen(
         videoHardwareProfile != persistedVideoHardwareProfile
     val videoFpsModeDirty =
         videoFpsMode != persistedVideoFpsMode
+    val videoGpuI420Dirty =
+        videoGpuI420 != persistedVideoGpuI420
+    val videoIveSpeedDirty =
+        videoIveSpeed != persistedVideoIveSpeed
+    val videoBitrateDirty =
+        videoBitrateInput.trim() != persistedVideoBitrateInput.trim()
+    val videoEncoderTuningDirty =
+        videoGpuI420Dirty || videoIveSpeedDirty || videoBitrateDirty
+
+    val parsedVideoBitrateBps =
+        videoBitrateInput.trim().let { raw ->
+            if (raw.isEmpty()) 0 else raw.toIntOrNull()
+        }
+    val videoBitrateValid =
+        parsedVideoBitrateBps != null &&
+            (
+                parsedVideoBitrateBps == 0 ||
+                    parsedVideoBitrateBps in
+                    ArdaVideoHardwareProfileController.bitrateMinBps..
+                        ArdaVideoHardwareProfileController.bitrateMaxBps
+            )
     val launcherBackgroundColorValid =
         ArdaVisualTheme.isValidColor(launcherBackgroundColor)
     val navigationBarColorValid =
@@ -1310,7 +1369,8 @@ private fun ConfigScreen(
         draft != null &&
             (bridgeConfigDirty || launcherLayoutDirty ||
                 densityScaleDirty || cpuBoostDirty || videoRouteDirty ||
-                videoHardwareProfileDirty || videoFpsModeDirty || visualThemeDirty)
+                videoHardwareProfileDirty || videoFpsModeDirty ||
+                videoEncoderTuningDirty || visualThemeDirty)
 
     val selectedObservedVideoConfig = snapshot.videoState.advertisedConfigs
         .firstOrNull { it.configIndex == snapshot.videoState.selectedConfigIndex }
@@ -1631,6 +1691,31 @@ private fun ConfigScreen(
                             selected = videoFpsMode,
                             hardwareProfile = videoHardwareProfile,
                             onSelected = { videoFpsMode = it },
+                        )
+
+                        // ARDA_C2_ENCODER_TUNING_UI_V2
+                        // Controls are always visible. Runtime application is
+                        // gated by the resolved hardware profile in autostart.
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            color = divider,
+                        )
+
+                        VideoEncoderTuningSection(
+                            gpuI420Enabled = videoGpuI420,
+                            onGpuI420Changed = { videoGpuI420 = it },
+                            iveSpeed = videoIveSpeed,
+                            onIveSpeedChanged = { videoIveSpeed = it },
+                            bitrateInput = videoBitrateInput,
+                            bitrateValid = videoBitrateValid,
+                            onBitrateInputChanged = { raw ->
+                                if (
+                                    raw.length <= 8 &&
+                                    raw.all { it.isDigit() }
+                                ) {
+                                    videoBitrateInput = raw
+                                }
+                            },
                         )
 
                         HorizontalDivider(
@@ -2209,6 +2294,22 @@ private fun ConfigScreen(
                                     context,
                                     videoFpsMode,
                                 )
+                                ArdaVideoHardwareProfileController.setGpuI420Enabled(
+                                    context,
+                                    videoGpuI420,
+                                )
+                                ArdaVideoHardwareProfileController.setIveSpeed(
+                                    context,
+                                    videoIveSpeed,
+                                )
+                                ArdaVideoHardwareProfileController.setBitrateBps(
+                                    context,
+                                    if (videoBitrateValid) {
+                                        parsedVideoBitrateBps ?: 0
+                                    } else {
+                                        0
+                                    },
+                                )
                                 ArdaPlatformRepository.saveConfig(context, config)
                                 ArdaPlatformRepository.setSystemBarRespectSafeAreaEnabled(
                                     context,
@@ -2261,6 +2362,17 @@ private fun ConfigScreen(
                                 persistedVideoRoute = videoRoute
                                 persistedVideoHardwareProfile = videoHardwareProfile
                                 persistedVideoFpsMode = videoFpsMode
+                                persistedVideoGpuI420 = videoGpuI420
+                                persistedVideoIveSpeed = videoIveSpeed
+                                persistedVideoBitrateInput =
+                                    if (videoBitrateValid) {
+                                        (parsedVideoBitrateBps ?: 0).toString()
+                                    } else {
+                                        "0"
+                                    }
+                                if (!videoBitrateValid) {
+                                    videoBitrateInput = "0"
+                                }
                                 cpuRuntimeState =
                                     ArdaCpuPerformance.readRuntimeState()
                                 videoRouteRuntimeState =
@@ -2342,6 +2454,120 @@ private fun ConfigScreen(
     }
 }
 
+
+@Composable
+private fun VideoEncoderTuningSection(
+    gpuI420Enabled: Boolean,
+    onGpuI420Changed: (Boolean) -> Unit,
+    iveSpeed: ArdaVideoIveSpeed,
+    onIveSpeedChanged: (ArdaVideoIveSpeed) -> Unit,
+    bitrateInput: String,
+    bitrateValid: Boolean,
+    onBitrateInputChanged: (String) -> Unit,
+) {
+    var speedExpanded by remember { mutableStateOf(false) }
+
+    Text(
+        text = stringResource(R.string.video_encoder_tuning_title),
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+    )
+    Text(
+        text = stringResource(R.string.video_encoder_tuning_description),
+        color = textSecondary,
+        style = MaterialTheme.typography.bodySmall,
+    )
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.video_gpu_conversion_label),
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = stringResource(R.string.video_gpu_conversion_description),
+                color = textSecondary,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Switch(
+            checked = gpuI420Enabled,
+            onCheckedChange = onGpuI420Changed,
+        )
+    }
+
+    Box {
+        OutlinedButton(
+            onClick = { speedExpanded = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp),
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.Start,
+            ) {
+                Text(
+                    text = stringResource(R.string.video_ive_speed_label),
+                    color = textSecondary,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Text(
+                    text = iveSpeed.displayName,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            Text("▾")
+        }
+
+        DropdownMenu(
+            expanded = speedExpanded,
+            onDismissRequest = { speedExpanded = false },
+        ) {
+            ArdaVideoIveSpeed.entries.forEach { speed ->
+                DropdownMenuItem(
+                    text = { Text(speed.displayName) },
+                    onClick = {
+                        onIveSpeedChanged(speed)
+                        speedExpanded = false
+                    },
+                )
+            }
+        }
+    }
+
+    OutlinedTextField(
+        value = bitrateInput,
+        onValueChange = onBitrateInputChanged,
+        modifier = Modifier.fillMaxWidth(),
+        label = {
+            Text(stringResource(R.string.video_bitrate_override_label))
+        },
+        supportingText = {
+            Text(
+                stringResource(
+                    if (bitrateValid) {
+                        R.string.video_bitrate_override_description
+                    } else {
+                        R.string.video_bitrate_override_invalid
+                    },
+                ),
+            )
+        },
+        isError = !bitrateValid,
+        singleLine = true,
+    )
+
+    Text(
+        text = stringResource(R.string.video_encoder_tuning_next_session),
+        color = textSecondary,
+        style = MaterialTheme.typography.labelSmall,
+    )
+}
 
 @Composable
 private fun VideoHardwareProfileSelector(

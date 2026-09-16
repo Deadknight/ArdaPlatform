@@ -142,6 +142,16 @@
 
     <string name="video_configuration_title">Android Auto video</string>
     <string name="video_configuration_description">Force a head-unit video resolution for the next AAP session. Auto selects the highest locally compatible quality, currently up to 1920×1080.</string>
+    <!-- ARDA_C2_ENCODER_TUNING_UI_V1 -->
+    <string name="video_encoder_tuning_title">Software AVC encoder tuning</string>
+    <string name="video_encoder_tuning_description">Advanced AVC controls. They are applied when the resolved runtime profile is Pi 5 HWC-VDS, including Auto on Pi 5.</string>
+    <string name="video_gpu_conversion_label">GPU conversion</string>
+    <string name="video_gpu_conversion_description">Off keeps the current production CPU/NEON RGB→I420 path. On uses the optional V3D GPU conversion path with NEON fail-open.</string>
+    <string name="video_ive_speed_label">Encoder speed</string>
+    <string name="video_bitrate_override_label">Bitrate override (bps)</string>
+    <string name="video_bitrate_override_description">0 keeps the Android Auto/C2 production bitrate. Override range: 4096–12000000 bps.</string>
+    <string name="video_bitrate_override_invalid">Invalid bitrate. Enter 0 or a value from 4096 to 12000000 bps. Saving an invalid value falls back to 0.</string>
+    <string name="video_encoder_tuning_next_session">Saved for all profiles; applied on the next Android Auto session only when the resolved profile is Pi 5 HWC-VDS.</string>
     <string name="video_hw_profile_label">Hardware video profile</string>
     <string name="video_hw_profile_auto">Auto · board detected</string>
     <string name="video_hw_profile_auto_description">Recommended. Detects Pi 4/bcm2711 or Pi 5/bcm2712 when the next Android Auto session starts.</string>

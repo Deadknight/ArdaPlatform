@@ -47,9 +47,36 @@ enum class ArdaVideoFpsMode(
  * Hardware profile is independent from the existing HDMI/TXP video-route
  * selector and Stable/Performance SurfaceFlinger capture selector.
  */
+// ARDA_C2_ENCODER_TUNING_UI_V1
+enum class ArdaVideoIveSpeed(
+    val settingValue: String,
+    val displayName: String,
+) {
+    Slowest("slowest", "SLOWEST"),
+    Normal("normal", "NORMAL"),
+    Fast("fast", "FAST"),
+    HighSpeed("high_speed", "HIGH SPEED"),
+    Fastest("fastest", "FASTEST");
+
+    companion object {
+        fun fromSetting(value: String?): ArdaVideoIveSpeed =
+            entries.firstOrNull {
+                it.settingValue == value?.trim()?.lowercase()
+            } ?: Fastest
+    }
+}
+
 object ArdaVideoHardwareProfileController {
     const val hardwareProfileSetting = "arda_video_hw_profile"
     const val fpsCapSetting = "arda_video_fps_cap"
+
+    // ARDA_C2_ENCODER_TUNING_UI_V1
+    const val gpuI420Setting = "arda_video_gpu_i420"
+    const val iveSpeedSetting = "arda_video_ive_speed"
+    const val bitrateBpsSetting = "arda_video_bitrate_bps"
+
+    const val bitrateMinBps = 4096
+    const val bitrateMaxBps = 12000000
 
     const val pi4OptimalFpsCap = 30
     const val pi5OptimalFpsCap = 60
@@ -105,6 +132,101 @@ object ArdaVideoHardwareProfileController {
 
         ArdaPlatformState.log(
             "ARDA_VIDEO_FPS_MODE_SELECTED=PASS mode=${mode.settingValue}",
+        )
+    }
+
+    // ARDA_C2_ENCODER_TUNING_UI_V1
+    fun getGpuI420Enabled(context: Context): Boolean =
+        Settings.Global.getString(
+            context.contentResolver,
+            gpuI420Setting,
+        )?.trim() == "1"
+
+    fun setGpuI420Enabled(
+        context: Context,
+        enabled: Boolean,
+    ) {
+        check(
+            Settings.Global.putString(
+                context.contentResolver,
+                gpuI420Setting,
+                if (enabled) "1" else "0",
+            ),
+        ) {
+            "Could not update GPU conversion setting."
+        }
+        ArdaPlatformState.log(
+            "ARDA_VIDEO_GPU_I420_SELECTED=PASS enabled=$enabled",
+        )
+    }
+
+    fun getIveSpeed(context: Context): ArdaVideoIveSpeed =
+        ArdaVideoIveSpeed.fromSetting(
+            Settings.Global.getString(
+                context.contentResolver,
+                iveSpeedSetting,
+            ),
+        )
+
+    fun setIveSpeed(
+        context: Context,
+        speed: ArdaVideoIveSpeed,
+    ) {
+        check(
+            Settings.Global.putString(
+                context.contentResolver,
+                iveSpeedSetting,
+                speed.settingValue,
+            ),
+        ) {
+            "Could not update AVC encoder speed."
+        }
+        ArdaPlatformState.log(
+            "ARDA_VIDEO_IVE_SPEED_SELECTED=PASS speed=${speed.settingValue}",
+        )
+    }
+
+    fun getBitrateBps(context: Context): Int {
+        val raw = Settings.Global.getString(
+            context.contentResolver,
+            bitrateBpsSetting,
+        )?.trim().orEmpty()
+
+        val parsed = raw.toIntOrNull() ?: 0
+        return if (
+            parsed == 0 ||
+            parsed in bitrateMinBps..bitrateMaxBps
+        ) {
+            parsed
+        } else {
+            0
+        }
+    }
+
+    fun normalizeBitrateBps(value: Int?): Int =
+        when {
+            value == null -> 0
+            value == 0 -> 0
+            value in bitrateMinBps..bitrateMaxBps -> value
+            else -> 0
+        }
+
+    fun setBitrateBps(
+        context: Context,
+        bitrateBps: Int,
+    ) {
+        val normalized = normalizeBitrateBps(bitrateBps)
+        check(
+            Settings.Global.putString(
+                context.contentResolver,
+                bitrateBpsSetting,
+                normalized.toString(),
+            ),
+        ) {
+            "Could not update AVC bitrate override."
+        }
+        ArdaPlatformState.log(
+            "ARDA_VIDEO_BITRATE_SELECTED=PASS bitrate_bps=$normalized",
         )
     }
 
