@@ -273,10 +273,9 @@ class ArdaBootstrapServerService : Service() {
 
         val completion = ExecutorCompletionService<Unit>(pumpExecutor)
         completion.submit {
-            copyUntilClosed(
+            copyPhoneFramesUntilClosed(
                 input = peer.inputStream,
                 output = bridge.getOutputStream(),
-                direction = "PHONE_TO_SENDERD",
             )
         }
         completion.submit {
@@ -290,6 +289,10 @@ class ArdaBootstrapServerService : Service() {
         try {
             completion.take().get()
         } finally {
+            ArdaInternetBridgeReceiver.dispatchStop(
+                applicationContext,
+                "bluetooth_bridge_end",
+            )
             closeQuietly(bridge)
             closeQuietly(peer)
         }
@@ -341,6 +344,68 @@ class ArdaBootstrapServerService : Service() {
         val ackText = ack.toString(StandardCharsets.US_ASCII)
         require(ackText == ArdaBluetoothTransport.bridgeAck) {
             "senderd rejected local bridge authentication: $ackText"
+        }
+    }
+
+    private fun copyPhoneFramesUntilClosed(
+        input: InputStream,
+        output: OutputStream,
+    ) {
+        var frames = 0L
+        try {
+            while (running.get()) {
+                val frame = try {
+                    ArdaBluetoothProtocol.readFrame(input)
+                } catch (_: java.io.EOFException) {
+                    break
+                }
+
+                require(frame.version == ArdaBluetoothProtocol.VERSION) {
+                    "Unsupported ARDA protocol version ${frame.version}"
+                }
+
+                // Preserve senderd as the owner of RN-3B protocol decisions:
+                // every phone frame is forwarded unchanged semantically.
+                ArdaBluetoothProtocol.writeFrame(
+                    output = output,
+                    operation = frame.operation,
+                    requestId = frame.requestId,
+                    payloadJson = frame.payloadJson,
+                )
+                frames += 1
+
+                when (frame.operation) {
+                    ArdaBluetoothProtocol.OP_PROXY_READY -> {
+                        runCatching {
+                            ArdaInternetBridgeReceiver.dispatchStart(
+                                applicationContext,
+                                frame.payloadJson,
+                            )
+                        }.onFailure { error ->
+                            ArdaPlatformState.log(
+                                "ARDA_RN4_AAOS_PROXY_FRAME_TAP_ERROR=" +
+                                    "${error.javaClass.simpleName}:${error.safeMessage()}",
+                            )
+                        }
+                    }
+                    ArdaBluetoothProtocol.OP_PROXY_STOP -> {
+                        ArdaInternetBridgeReceiver.dispatchStop(
+                            applicationContext,
+                            "phone_proxy_stop",
+                        )
+                    }
+                    ArdaBluetoothProtocol.OP_SESSION_STOP -> {
+                        ArdaInternetBridgeReceiver.dispatchStop(
+                            applicationContext,
+                            "phone_session_stop",
+                        )
+                    }
+                }
+            }
+        } finally {
+            ArdaPlatformState.log(
+                "ARDA_RN4_AAOS_FRAME_PUMP_END=PHONE_TO_SENDERD frames=$frames",
+            )
         }
     }
 

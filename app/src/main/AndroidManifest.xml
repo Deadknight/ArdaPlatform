@@ -23,6 +23,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.INTERACT_ACROSS_USERS" />
     <uses-permission android:name="android.permission.INTERACT_ACROSS_USERS_FULL" />
@@ -86,6 +87,47 @@
             android:exported="false"
             android:foregroundServiceType="connectedDevice"
             android:singleUser="true" />
+
+
+        <!--
+             RN-4 v26 experimental global physical-network bridge.
+             system_server transfers a duplicate arda0 TUN fd here.
+        -->
+        <service
+            android:name=".ArdaSystemNetworkBridgeService"
+            android:directBootAware="true"
+            android:exported="true"
+            android:permission="android.permission.DUMP"
+            android:singleUser="true" />
+
+        <!--
+             RN-4 full internet bridge. Intentionally NOT singleUser: Android VPN
+             state is per-user, so this service must run in the foreground Driver
+             user where Maps and other apps run.
+        -->
+        <service
+            android:name=".ArdaInternetVpnService"
+            android:directBootAware="true"
+            android:exported="true"
+            android:foregroundServiceType="specialUse"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON"
+                android:value="false" />
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="ARDA reverse cellular internet tunnel" />
+        </service>
+
+        <receiver
+            android:name=".ArdaInternetBridgeReceiver"
+            android:directBootAware="true"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="${applicationId}.permission.MANAGE_ARDA_PLATFORM" />
 
 
         <receiver

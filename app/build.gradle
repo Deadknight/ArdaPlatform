@@ -10,8 +10,8 @@ android {
         applicationId "com.github.deadknight.ardaplatform"
         minSdk 29
         targetSdk 36
-        versionCode 21
-        versionName "0.8.0-appearance-picker"
+        versionCode 27
+        versionName "0.9.5-rn4-system-network-default"
     }
     buildTypes {
         debug {
