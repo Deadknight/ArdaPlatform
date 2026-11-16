@@ -3,3 +3,6 @@
 /app/build
 /.idea
 local.properties
+
+# Generated project-level Gradle artifacts (ARDA V49)
+/build/

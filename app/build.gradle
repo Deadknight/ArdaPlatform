@@ -10,7 +10,7 @@ android {
         applicationId "com.github.deadknight.ardaplatform"
         minSdk 29
         targetSdk 36
-        versionCode 27
+        versionCode 28
         versionName "0.9.5-rn4-system-network-default"
     }
     buildTypes {

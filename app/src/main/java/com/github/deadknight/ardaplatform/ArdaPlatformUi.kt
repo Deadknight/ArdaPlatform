@@ -1655,6 +1655,13 @@ private fun ConfigScreen(
                             style = MaterialTheme.typography.bodyMedium,
                         )
 
+                        // ARDA_HDMI_V25_2_SAVED_PROFILE_UI
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            color = divider,
+                        )
+                        ArdaHdmiDisplaySettingsSection()
+
                         ArdaCaptureProfileSection(
                             embedded = true,
                         )
